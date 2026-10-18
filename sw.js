@@ -1,4 +1,5 @@
-const CACHE_NAME = 'state-cv-cache-v1';
+const CACHE_NAME = 'state-cv-cache-v2';
+const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',
   './styles.css',
@@ -15,7 +16,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(caches.keys().then((keys) => Promise.all(
-    keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+    keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key))
   )));
   self.clients.claim();
 });

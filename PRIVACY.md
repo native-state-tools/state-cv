@@ -8,7 +8,7 @@ State CV is a local-first application. This is the complete list of what it does
 
 - **No analytics or tracking.** The application contains no telemetry, cookies for tracking, or third-party analytics of any kind. A Content Security Policy blocks all external connections at the browser level.
 
-- **Storage is browser-local.** Drafts are saved in your browser's local storage and never leave your device. Clearing your browsing data or switching browsers means starting fresh — use the built-in Backup (JSON) feature to keep copies.
+- **Storage is browser-local.** Drafts are saved in your browser's local storage and never leave your device. Clearing your browsing data or switching browsers means starting fresh — use the built-in Backup (JSON) feature to keep copies. If a saved draft cannot be read, State CV reports the problem and avoids overwriting it until you import a backup or explicitly start a new CV.
 
 - **No liability for lost drafts.** Because data lives only in your browser, the operator accepts no responsibility for lost work. Back up what matters to you.
 

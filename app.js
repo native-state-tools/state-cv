@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'state-cv-data-v1';
 const LEGACY_STORAGE_KEY = 'resume-forge-data-v1';
 const APP_NAME = 'State CV';
+const MAX_IMPORT_FILE_SIZE = 25 * 1024 * 1024;
 
 const defaultData = {
   basics: { name: '', title: '', location: '', email: '', phone: '', website: '' },
@@ -11,6 +12,7 @@ const defaultData = {
   skills: ''
 };
 
+let storageLoadFailed = false;
 let resumeData = loadData();
 let saveTimer;
 
@@ -57,11 +59,20 @@ function loadData() {
     }
     const stored = raw ? JSON.parse(raw) : null;
     return stored ? normalizeData(stored) : structuredClone(defaultData);
-  } catch { return structuredClone(defaultData); }
+  } catch (error) {
+    storageLoadFailed = true;
+    console.error('State CV could not load saved data.', error);
+    return structuredClone(defaultData);
+  }
 }
 
 function saveData() {
   const status = document.querySelector('#saveStatus');
+  if (storageLoadFailed) {
+    status.className = 'save-status error';
+    status.innerHTML = '<span class="status-dot"></span>Saved data not replaced';
+    return false;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(resumeData));
     status.className = 'save-status saved';
@@ -341,6 +352,7 @@ function importPdfLines(lines) {
   renderFields();
   updatePreview();
   updateCompletion();
+  storageLoadFailed = false;
   saveData();
   return { sections: Object.keys(sections).filter((key) => sections[key].length), experience: importedExperience.length, education: importedEducation.length };
 }
@@ -425,8 +437,7 @@ document.querySelector('#paperSize').addEventListener('change', (event) => updat
 document.querySelector('#importPdfButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 async function handlePdfImport(file) {
   if (!file) return;
-  const maxFileSize = 25 * 1024 * 1024;
-  if (file.size > maxFileSize) {
+  if (file.size > MAX_IMPORT_FILE_SIZE) {
     setImportStatus('PDF is too large', true);
     alert('Please choose a PDF smaller than 25 MB.');
     return;
@@ -455,12 +466,15 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
   const [file] = event.target.files;
   if (!file) return;
   if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) await handlePdfImport(file);
-  else {
+  else if (file.size > MAX_IMPORT_FILE_SIZE) {
+    setImportStatus('Backup file is too large', true);
+    alert('Please choose a backup file smaller than 25 MB.');
+  } else {
     try {
       const imported = JSON.parse(await file.text());
       resumeData = normalizeData(imported);
       document.querySelector('#exportFilename').removeAttribute('data-edited');
-      renderFields(); updatePreview(); updateCompletion(); saveData();
+      renderFields(); updatePreview(); updateCompletion(); storageLoadFailed = false; saveData();
       closeLaunchScreen();
     } catch { alert('That file could not be read as a State CV JSON export.'); }
   }
@@ -473,15 +487,19 @@ updatePreview();
 updateCompletion();
 updatePrintPageSize();
 updateLaunchScreen();
+if (storageLoadFailed) setImportStatus('Saved data could not be loaded', true);
 document.querySelector('#brandHome').addEventListener('click', (event) => { event.preventDefault(); openLaunchScreen(); });
 document.querySelector('#continueButton').addEventListener('click', closeLaunchScreen);
 document.querySelector('#newCvButton').addEventListener('click', () => {
   resumeData = structuredClone(defaultData);
+  storageLoadFailed = false;
   document.querySelector('#exportFilename').removeAttribute('data-edited');
   renderFields(); updatePreview(); updateCompletion(); saveData(); closeLaunchScreen();
 });
 document.querySelector('#launchImportButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 
 if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').catch((error) => {
+    console.error('State CV could not enable offline support.', error);
+  });
 }
