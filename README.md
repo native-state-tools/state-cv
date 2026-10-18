@@ -1,8 +1,8 @@
-# CV Forge
+# State CV
 
-   Live version: https://native-state-tools.github.io/cv-forge/
+Live version: https://native-state-tools.github.io/state-cv/
 
-A local-first ATS-compatible CV builder built with HTML, CSS, and JavaScript.
+A local-first ATS-compatible CV builder built with HTML, CSS, and JavaScript. Part of **Native State Tools**.
 
 ## Run
 
@@ -30,7 +30,7 @@ The `Export PDF` button creates a native Letter or A4 PDF with selectable text, 
 
 ## Offline operation
 
-PDF.js 3.11.174 and jsPDF 2.5.1 are vendored locally in `vendor/`, fonts use local system stacks, and the Content Security Policy blocks external scripts, styles, fonts, images, workers, and connections. CV Forge can run with Wi-Fi disabled and makes no external network requests.
+PDF.js 3.11.174 and jsPDF 2.5.1 are vendored locally in `vendor/`, fonts use local system stacks, and the Content Security Policy blocks external scripts, styles, fonts, images, workers, and connections. State CV can run with Wi-Fi disabled and makes no external network requests.
 
 ## License
 
