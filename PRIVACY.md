@@ -1,6 +1,6 @@
 # Privacy Policy
 
-CV Forge is a local-first application. This is the complete list of what it does with your data, which is: nothing that leaves your device.
+State CV is a local-first application. This is the complete list of what it does with your data, which is: nothing that leaves your device.
 
 - **No accounts.** There is nothing to sign up for and nothing to identify you.
 
