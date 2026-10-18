@@ -39,5 +39,5 @@ http.createServer((request, response) => {
     response.end(content);
   });
 }).listen(3000, '127.0.0.1', () => {
-  console.log('CV Forge running at 127.0.0.1:3000');
+  console.log('State CV running at 127.0.0.1:3000');
 });
