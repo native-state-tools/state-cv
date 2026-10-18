@@ -1,8 +1,8 @@
-# CV Forge Agent Instructions
+# State CV Agent Instructions
 
 ## Project Profile
 
-- CV Forge is a local-first, privacy-first ATS CV builder. Read [PRIVACY.md](PRIVACY.md) before changing data flows and [README.md](README.md) for supported behavior.
+- State CV is a local-first, privacy-first ATS CV builder by Native State Tools. Read [PRIVACY.md](PRIVACY.md) before changing data flows and [README.md](README.md) for supported behavior.
 - The current app is a vanilla HTML/CSS/JavaScript browser app. `app.js` owns editor state, local persistence, PDF import, and PDF export; `index.html` owns markup and the CSP; `styles.css` owns presentation.
 - `server.js` is only a Node built-in-module static development server bound to `127.0.0.1:3000`. It is not an application backend.
 - PDF.js and jsPDF are vendored in `vendor/`. Do not replace them with CDN scripts or runtime package downloads.
@@ -20,7 +20,7 @@
 - Prefer vanilla JavaScript and existing local helpers over adding a framework or abstraction. Keep state normalization and storage behavior deterministic.
 - Keep the existing public file layout and vendored dependency approach unless the task requires a migration.
 - For a new native project, prefer Tauri with vanilla HTML/CSS/JS. Android via Tauri or Capacitor is the next target; do not add iOS support unless explicitly requested. Challenge Firebase/Supabase, auth, analytics, auto-sync, Electron, and framework lock-in because they conflict with the project profile.
-- For a new repository, create `ARCHITECTURE.md` and `PRIVACY.md` before application code, and include `LICENSE`, `README.md`, and `src/storage.js`. Do not create those scaffolding files as unrelated work in this existing CV Forge repository.
+- For a new repository, create `ARCHITECTURE.md` and `PRIVACY.md` before application code, and include `LICENSE`, `README.md`, and `src/storage.js`. Do not create those scaffolding files as unrelated work in this existing State CV repository.
 
 ## Validation
 
