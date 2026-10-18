@@ -1,7 +1,27 @@
 const STORAGE_KEY = 'state-cv-data-v1';
-const LEGACY_STORAGE_KEY = 'resume-forge-data-v1';
 const APP_NAME = 'State CV';
-const MAX_IMPORT_FILE_SIZE = 25 * 1024 * 1024;
+const SCHEMA_VERSION = 1;
+
+// Import and parsing limits. Anything outside these is rejected rather than risk a hung tab or a full storage quota.
+const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_PDF_IMPORT_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_PAGES = 20;
+const MAX_PDF_TEXT_CHARS = 200000;
+const PDF_PARSE_TIMEOUT_MS = 30000;
+
+// Field limits. These match the maxlength attributes in index.html so the editor can never create data the validator rejects.
+const MAX_EXPERIENCE_ENTRIES = 30;
+const MAX_EDUCATION_ENTRIES = 20;
+const FIELD_LIMITS = {
+  basics: { name: 200, title: 200, location: 200, email: 254, phone: 40, website: 300 },
+  exportName: 120,
+  summary: 500,
+  skills: 2000,
+  experience: { role: 200, company: 200, dates: 100, highlights: 10000 },
+  education: { degree: 200, school: 200, dates: 100 }
+};
+
+class ImportError extends Error {}
 
 const defaultData = {
   basics: { name: '', title: '', location: '', email: '', phone: '', website: '' },
@@ -19,6 +39,8 @@ let saveTimer;
 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+// Export filenames come from user input, so strip path separators and control characters and cap the length.
+const safeFilename = (value, fallback = 'CV') => String(value || '').replace(/\.(pdf|json)$/i, '').replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, ' ').replace(/\s+/g, ' ').replace(/^[\s.]+/, '').trim().slice(0, 100) || fallback;
 const getValue = (path) => path.split('.').reduce((value, key) => value?.[key], resumeData) ?? '';
 const setValue = (path, value) => {
   const keys = path.split('.');
@@ -30,35 +52,55 @@ const setValue = (path, value) => {
   target[lastKey] = value;
 };
 
-function normalizeData(data = {}) {
-  const experience = Array.isArray(data.experience) ? data.experience : [];
-  const education = Array.isArray(data.education) ? data.education : [];
-  const basics = data.basics && typeof data.basics === 'object' ? data.basics : {};
-  const text = (value, fallback = '') => typeof value === 'string' ? value : fallback;
-  const normalizeRecord = (record, defaults) => Object.fromEntries(Object.keys(defaults).map((key) => [key, text(record?.[key])]));
+// Builds a clean CV object from untrusted input (a backup file, saved storage, or parsed PDF text).
+// Only known keys are copied, so unexpected keys in a file are dropped.
+// strict: true rejects bad input with an ImportError. strict: false clamps it instead (used for PDF text we parse ourselves).
+function normalizeData(data, { strict = false } = {}) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new ImportError('The file is not a State CV backup.');
+  if (data.schemaVersion !== undefined) {
+    if (!Number.isInteger(data.schemaVersion) || data.schemaVersion < 1) throw new ImportError('The backup has an invalid version number.');
+    if (data.schemaVersion > SCHEMA_VERSION) throw new ImportError('This backup was made by a newer version of State CV.');
+  }
+  const fail = (message) => { if (strict) throw new ImportError(message); };
+  const text = (value, limit, label) => {
+    if (value === undefined || value === null) return '';
+    if (typeof value !== 'string') { fail(`"${label}" must be text.`); return ''; }
+    const clean = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+    if (clean.length > limit) { fail(`"${label}" is longer than ${limit} characters.`); return clean.slice(0, limit); }
+    return clean;
+  };
+  const list = (value, limit, label) => {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) { fail(`"${label}" must be a list.`); return []; }
+    if (value.length > limit) { fail(`"${label}" has more than ${limit} entries.`); return value.slice(0, limit); }
+    return value;
+  };
+  const record = (item, limits, label) => {
+    if (item !== null && (typeof item !== 'object' || Array.isArray(item))) { fail(`An entry in "${label}" is not valid.`); item = null; }
+    return Object.fromEntries(Object.entries(limits).map(([key, limit]) => [key, text(item?.[key], limit, `${label} ${key}`)]));
+  };
+  const basics = data.basics && typeof data.basics === 'object' && !Array.isArray(data.basics) ? data.basics : {};
+  if (data.basics !== undefined && basics !== data.basics) fail('"basics" is not valid.');
+  const experience = list(data.experience, MAX_EXPERIENCE_ENTRIES, 'experience').map((item) => record(item, FIELD_LIMITS.experience, 'experience'));
+  const education = list(data.education, MAX_EDUCATION_ENTRIES, 'education').map((item) => record(item, FIELD_LIMITS.education, 'education'));
   return {
-    ...structuredClone(defaultData),
-    basics: Object.fromEntries(Object.keys(defaultData.basics).map((key) => [key, text(basics[key])])),
-    exportName: text(data.exportName),
-    summary: text(data.summary),
-    skills: text(data.skills),
-    experience: experience.map((record) => normalizeRecord(record, defaultData.experience[0])),
-    education: education.map((record) => normalizeRecord(record, defaultData.education[0]))
+    basics: record(basics, FIELD_LIMITS.basics, 'basics'),
+    exportName: text(data.exportName, FIELD_LIMITS.exportName, 'exportName'),
+    summary: text(data.summary, FIELD_LIMITS.summary, 'summary'),
+    skills: text(data.skills, FIELD_LIMITS.skills, 'skills'),
+    experience: experience.length ? experience : structuredClone(defaultData.experience),
+    education: education.length ? education : structuredClone(defaultData.education)
   };
 }
 
+// The shape written to storage and to JSON backups. schemaVersion lets future versions migrate old data safely.
+function toStorable() { return { schemaVersion: SCHEMA_VERSION, ...resumeData }; }
+
 function loadData() {
   try {
-    let raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (legacy) {
-        raw = legacy;
-        try { localStorage.setItem(STORAGE_KEY, legacy); } catch { /* ignore quota */ }
-      }
-    }
+    const raw = localStorage.getItem(STORAGE_KEY);
     const stored = raw ? JSON.parse(raw) : null;
-    return stored ? normalizeData(stored) : structuredClone(defaultData);
+    return stored ? normalizeData(stored, { strict: true }) : structuredClone(defaultData);
   } catch (error) {
     storageLoadFailed = true;
     console.error('State CV could not load saved data.', error);
@@ -66,30 +108,33 @@ function loadData() {
   }
 }
 
-function saveData() {
+// Status text is always set as plain text, never parsed as HTML.
+function setStatus(state, message) {
   const status = document.querySelector('#saveStatus');
+  const dot = document.createElement('span');
+  dot.className = 'status-dot';
+  status.className = `save-status ${state}`;
+  status.replaceChildren(dot, document.createTextNode(message));
+}
+
+function saveData() {
   if (storageLoadFailed) {
-    status.className = 'save-status error';
-    status.innerHTML = '<span class="status-dot"></span>Saved data not replaced';
+    setStatus('error', 'Saved data not replaced');
     return false;
   }
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(resumeData));
-    status.className = 'save-status saved';
-    status.innerHTML = '<span class="status-dot"></span>Saved locally';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStorable()));
+    setStatus('saved', 'Saved locally');
     return true;
   } catch (error) {
-    status.className = 'save-status error';
-    status.innerHTML = '<span class="status-dot"></span>Local save unavailable';
+    setStatus('error', 'Local save unavailable');
     console.error('State CV could not save locally.', error);
     return false;
   }
 }
 
 function scheduleSave() {
-  const status = document.querySelector('#saveStatus');
-  status.className = 'save-status saving';
-  status.innerHTML = '<span class="status-dot"></span>Saving...';
+  setStatus('saving', 'Saving...');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveData, 350);
 }
@@ -115,7 +160,7 @@ function renderRepeaters() {
 
 function renderRepeater(listId, templateId, items, createBlankRecord) {
   const list = document.querySelector(`#${listId}`);
-  list.innerHTML = '';
+  list.replaceChildren();
   items.forEach((item, index) => {
     const node = document.querySelector(`#${templateId}`).content.cloneNode(true);
     node.querySelectorAll('[data-key]').forEach((field) => {
@@ -159,9 +204,7 @@ function updateCompletion() {
 }
 
 function setImportStatus(message, isError = false) {
-  const status = document.querySelector('#saveStatus');
-  status.className = `save-status ${isError ? 'error' : 'saved'}`;
-  status.innerHTML = '<span class="status-dot"></span>' + message;
+  setStatus(isError ? 'error' : 'saved', message);
 }
 
 function closeLaunchScreen() {
@@ -180,30 +223,54 @@ function openLaunchScreen() {
 
 function updateLaunchScreen() {
   let hasDraft = false;
-  try { hasDraft = Boolean(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)); } catch { hasDraft = false; }
+  try { hasDraft = Boolean(localStorage.getItem(STORAGE_KEY)); } catch { hasDraft = false; }
   const name = resumeData.basics.name.trim();
   document.querySelector('#continueLabel').textContent = hasDraft ? `Continue ${name || 'your CV'}` : 'Continue your CV';
   document.querySelector('#continueMeta').textContent = hasDraft ? 'Saved locally' : 'No saved draft yet';
 }
 
 async function extractPdfText(file) {
-  if (!window.pdfjsLib) throw new Error('PDF reader is unavailable. The local vendor files may be missing.');
+  if (!window.pdfjsLib) throw new ImportError('PDF reader is unavailable. The local vendor files may be missing.');
   const buffer = await file.arrayBuffer();
-  const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
-  if (pdf.numPages > 100) throw new Error('PDF has too many pages to import safely.');
+  // We only read text, so everything else PDF.js can do is switched off: no eval-compiled font code, no XFA forms,
+  // no browser font loading, and no worker network fetches. Untrusted PDFs get the smallest possible attack surface.
+  const loadingTask = window.pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+    isEvalSupported: false,
+    enableXfa: false,
+    disableFontFace: true,
+    useWorkerFetch: false,
+    verbosity: 0
+  });
+  let timedOut = false;
+  const stopReading = () => Promise.resolve(loadingTask.destroy()).catch(() => {});
+  const timer = setTimeout(() => { timedOut = true; stopReading(); }, PDF_PARSE_TIMEOUT_MS);
   const pages = [];
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const rows = [];
-    content.items.filter((item) => item.str.trim()).forEach((item) => {
-      const x = item.transform[4];
-      const y = item.transform[5];
-      const row = rows.find((candidate) => Math.abs(candidate.y - y) < 4);
-      if (row) row.items.push({ x, text: item.str });
-      else rows.push({ y, items: [{ x, text: item.str }] });
-    });
-    pages.push(rows.sort((a, b) => b.y - a.y).map((row) => row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(' ').replace(/\s*@\s*/g, '@').replace(/\s+/g, ' ').trim()).filter(Boolean));
+  try {
+    const pdf = await loadingTask.promise;
+    if (pdf.numPages > MAX_PDF_PAGES) throw new ImportError(`This PDF has more than ${MAX_PDF_PAGES} pages, which is too long for a CV import.`);
+    let totalChars = 0;
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const rows = [];
+      content.items.filter((item) => item.str.trim()).forEach((item) => {
+        totalChars += item.str.length;
+        if (totalChars > MAX_PDF_TEXT_CHARS) throw new ImportError('This PDF contains too much text to import safely.');
+        const x = item.transform[4];
+        const y = item.transform[5];
+        const row = rows.find((candidate) => Math.abs(candidate.y - y) < 4);
+        if (row) row.items.push({ x, text: item.str });
+        else rows.push({ y, items: [{ x, text: item.str }] });
+      });
+      pages.push(rows.sort((a, b) => b.y - a.y).map((row) => row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(' ').replace(/\s*@\s*/g, '@').replace(/\s+/g, ' ').trim()).filter(Boolean));
+    }
+  } catch (error) {
+    if (timedOut) throw new ImportError('Reading this PDF took too long, so it was stopped.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    stopReading();
   }
   const appChrome = new RegExp(`^\\d{1,2}\\/\\d{1,2}\\/\\d{2,4},?\\s+.*${APP_NAME.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')} \\| .*`, 'i');
   return pages.flat().filter((line) => line && !appChrome.test(line) && !/^localhost:\d+\s+\d+\/\d+$/i.test(line));
@@ -349,6 +416,8 @@ function importPdfLines(lines) {
   if (sections.skills?.length) resumeData.skills = sections.skills.join(', ').split(',').map((skill) => cleanImportedLine(skill.trim())).filter(Boolean).join(', ');
   if (importedExperience.length) resumeData.experience = importedExperience;
   if (importedEducation.length) resumeData.education = importedEducation;
+  // Parsed PDF text is untrusted: clamp every field and entry count to the same limits the editor enforces.
+  resumeData = normalizeData(resumeData, { strict: false });
   renderFields();
   updatePreview();
   updateCompletion();
@@ -422,7 +491,7 @@ function exportPdf() {
     education.filter((item) => item.degree || item.school).forEach((item) => { ensureSpace(28); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(item.degree || 'Degree', margin, y); if (item.dates) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(item.dates, pageWidth - margin, y, { align: 'right' }); } y += 12; if (item.school) writeLines(item.school, 8.5, { leading: 11 }); y += 4; });
   }
   if (skills) { sectionHeading('Skills'); writeLines(skills, 9, { leading: 12 }); }
-  const filename = `${(document.querySelector('#exportFilename').value.trim() || basics.name || 'CV').replace(/\.pdf$/i, '')}.pdf`;
+  const filename = `${safeFilename(document.querySelector('#exportFilename').value || basics.name)}.pdf`;
   doc.save(filename);
   setImportStatus('PDF downloaded');
 }
@@ -437,21 +506,25 @@ document.querySelector('#paperSize').addEventListener('change', (event) => updat
 document.querySelector('#importPdfButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 async function handlePdfImport(file) {
   if (!file) return;
-  if (file.size > MAX_IMPORT_FILE_SIZE) {
+  if (file.size > MAX_PDF_IMPORT_BYTES) {
     setImportStatus('PDF is too large', true);
-    alert('Please choose a PDF smaller than 25 MB.');
+    alert(`Please choose a PDF smaller than ${MAX_PDF_IMPORT_BYTES / (1024 * 1024)} MB.`);
     return;
   }
   setImportStatus('Reading PDF...');
   try {
     const lines = await extractPdfText(file);
-    if (!lines.length) throw new Error('No selectable text found.');
+    if (!lines.length) throw new ImportError('No selectable text found.');
     const imported = importPdfLines(lines);
     setImportStatus(`PDF imported · ${imported.experience + imported.education} entries`);
     closeLaunchScreen();
   } catch (error) {
-    setImportStatus(error.message === 'No selectable text found.' ? 'Scanned PDF needs OCR' : 'PDF import failed', true);
-    alert(error.message === 'No selectable text found.' ? 'This PDF is image-based, so it has no selectable text to import. Try an OCR-enabled PDF.' : error.message);
+    const noText = error instanceof ImportError && error.message === 'No selectable text found.';
+    setImportStatus(noText ? 'Scanned PDF needs OCR' : 'PDF import failed', true);
+    if (noText) alert('This PDF is image-based, so it has no selectable text to import. Try an OCR-enabled PDF.');
+    // Our own messages are written for people. Anything else came from the PDF library, so keep it out of the UI.
+    else if (error instanceof ImportError) alert(error.message);
+    else { console.error('State CV could not read that PDF.', error); alert('That PDF could not be read. It may be damaged or password protected.'); }
   }
 }
 document.querySelector('#pdfInput').addEventListener('change', async (event) => {
@@ -460,23 +533,34 @@ document.querySelector('#pdfInput').addEventListener('change', async (event) => 
   event.target.value = '';
 });
 document.querySelector('#exportFilename').addEventListener('input', (event) => { event.target.dataset.edited = 'true'; resumeData.exportName = event.target.value; scheduleSave(); });
-document.querySelector('#exportButton').addEventListener('click', () => { const blob = new Blob([JSON.stringify(resumeData, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${(document.querySelector('#exportFilename').value.trim() || resumeData.basics.name || 'CV').replace(/\.pdf$/i, '')}.json`; link.click(); URL.revokeObjectURL(link.href); });
+document.querySelector('#exportButton').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(toStorable(), null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${safeFilename(document.querySelector('#exportFilename').value || resumeData.basics.name)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
 document.querySelector('#importButton').addEventListener('click', () => document.querySelector('#importInput').click());
 document.querySelector('#importInput').addEventListener('change', async (event) => {
   const [file] = event.target.files;
   if (!file) return;
   if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) await handlePdfImport(file);
-  else if (file.size > MAX_IMPORT_FILE_SIZE) {
+  else if (file.size > MAX_JSON_IMPORT_BYTES) {
     setImportStatus('Backup file is too large', true);
-    alert('Please choose a backup file smaller than 25 MB.');
+    alert(`Please choose a backup file smaller than ${MAX_JSON_IMPORT_BYTES / (1024 * 1024)} MB.`);
   } else {
     try {
-      const imported = JSON.parse(await file.text());
-      resumeData = normalizeData(imported);
+      let imported;
+      try { imported = JSON.parse(await file.text()); } catch { throw new ImportError('That file is not valid JSON.'); }
+      resumeData = normalizeData(imported, { strict: true });
       document.querySelector('#exportFilename').removeAttribute('data-edited');
       renderFields(); updatePreview(); updateCompletion(); storageLoadFailed = false; saveData();
       closeLaunchScreen();
-    } catch { alert('That file could not be read as a State CV JSON export.'); }
+    } catch (error) {
+      setImportStatus('Backup import failed', true);
+      alert(error instanceof ImportError ? `That backup could not be imported. ${error.message}` : 'That file could not be read as a State CV JSON export.');
+    }
   }
   event.target.value = '';
 });

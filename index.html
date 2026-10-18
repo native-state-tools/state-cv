@@ -45,7 +45,7 @@
         <button class="button button-ghost" id="importButton" type="button"><span aria-hidden="true">↥</span> Import</button>
         <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup</button>
         <label class="paper-size-control" title="Choose your PDF page size"><span>PDF</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
-        <label class="filename-control" title="Choose the exported file name"><span>File</span><input id="exportFilename" type="text" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
+        <label class="filename-control" title="Choose the exported file name"><span>File</span><input id="exportFilename" type="text" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
         <button class="button button-accent" id="printButton" type="button" title="Export a selectable-text PDF"><span aria-hidden="true">↗</span> Export PDF</button>
         <input id="importInput" type="file" accept="application/json,.json,application/pdf,.pdf" hidden />
         <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden />
@@ -71,12 +71,12 @@
           <section class="form-section">
             <div class="section-heading"><span class="section-number">01</span><div><h2>Contact details</h2><p>The essentials recruiters look for first.</p></div></div>
             <div class="form-grid">
-              <label class="field field-wide"><span>Full name</span><input data-path="basics.name" placeholder="Alex Morgan" /></label>
-              <label class="field"><span>Professional title</span><input data-path="basics.title" placeholder="Product Designer" /></label>
-              <label class="field"><span>Location</span><input data-path="basics.location" placeholder="Austin, TX" /></label>
-              <label class="field"><span>Email</span><input data-path="basics.email" type="email" placeholder="alex@email.com" /></label>
-              <label class="field"><span>Phone</span><input data-path="basics.phone" placeholder="(555) 123-4567" /></label>
-              <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" placeholder="linkedin.com/in/alexmorgan" /></label>
+              <label class="field field-wide"><span>Full name</span><input data-path="basics.name" maxlength="200" placeholder="Alex Morgan" /></label>
+              <label class="field"><span>Professional title</span><input data-path="basics.title" maxlength="200" placeholder="Product Designer" /></label>
+              <label class="field"><span>Location</span><input data-path="basics.location" maxlength="200" placeholder="Austin, TX" /></label>
+              <label class="field"><span>Email</span><input data-path="basics.email" maxlength="254" type="email" placeholder="alex@email.com" /></label>
+              <label class="field"><span>Phone</span><input data-path="basics.phone" maxlength="40" placeholder="(555) 123-4567" /></label>
+              <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" maxlength="300" placeholder="linkedin.com/in/alexmorgan" /></label>
             </div>
           </section>
 
@@ -97,7 +97,7 @@
 
           <section class="form-section">
             <div class="section-heading"><span class="section-number">05</span><div><h2>Skills</h2><p>Use the language of your target role.</p></div></div>
-            <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
+            <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" maxlength="2000" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
           </section>
         </form>
       </section>
@@ -109,10 +109,10 @@
     </main>
   </div>
   <template id="experienceTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button" title="Remove experience" aria-label="Remove experience">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>
+    <article class="repeat-item"><button class="remove-item" type="button" title="Remove experience" aria-label="Remove experience">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>
   </template>
   <template id="educationTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button" title="Remove education" aria-label="Remove education">×</button><div class="form-grid"><label class="field field-wide"><span>Degree or credential</span><input data-key="degree" placeholder="BFA, Interaction Design" /></label><label class="field"><span>School</span><input data-key="school" placeholder="State University" /></label><label class="field"><span>Dates</span><input data-key="dates" placeholder="2014 — 2018" /></label></div></article>
+    <article class="repeat-item"><button class="remove-item" type="button" title="Remove education" aria-label="Remove education">×</button><div class="form-grid"><label class="field field-wide"><span>Degree or credential</span><input data-key="degree" maxlength="200" placeholder="BFA, Interaction Design" /></label><label class="field"><span>School</span><input data-key="school" maxlength="200" placeholder="State University" /></label><label class="field"><span>Dates</span><input data-key="dates" maxlength="100" placeholder="2014 — 2018" /></label></div></article>
   </template>
   <script src="app.js"></script>
 </body>
