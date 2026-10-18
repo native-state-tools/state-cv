@@ -1,8 +1,8 @@
 {
-  "name": "resume-forge",
+  "name": "state-cv",
   "version": "1.0.0",
   "private": true,
-  "description": "Local-first ATS compatible resume builder",
+  "description": "State CV — local-first ATS-compatible CV builder by Native State Tools",
   "scripts": {
     "start": "node server.js"
   }
