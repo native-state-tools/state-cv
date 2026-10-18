@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cv-forge-cache-v1';
+const CACHE_NAME = 'state-cv-cache-v1';
 const PRECACHE_URLS = [
   './index.html',
   './styles.css',
