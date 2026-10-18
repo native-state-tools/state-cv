@@ -1,7 +1,7 @@
 {
-  "name": "CV Forge",
-  "short_name": "CV Forge",
-  "description": "Local-first ATS-compatible CV builder",
+  "name": "State CV",
+  "short_name": "State CV",
+  "description": "Local-first ATS-compatible CV builder by Native State Tools",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0d0a1c",
