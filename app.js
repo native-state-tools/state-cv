@@ -28,6 +28,17 @@ let saveTimer;
 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+function safeFilename(value, fallback = 'CV') {
+  const filename = String(value)
+    .replace(/\.(?:pdf|json)$/i, '')
+    .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[. ]+/, '')
+    .trim()
+    .slice(0, 100)
+    .trim();
+  return filename || fallback;
+}
 const getValue = (path) => path.split('.').reduce((value, key) => value?.[key], resumeData) ?? '';
 const setValue = (path, value) => {
   const keys = path.split('.');
@@ -525,7 +536,7 @@ function exportPdf() {
     education.filter((item) => item.degree || item.school).forEach((item) => { ensureSpace(28); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(item.degree || 'Degree', margin, y); if (item.dates) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(item.dates, pageWidth - margin, y, { align: 'right' }); } y += 12; if (item.school) writeLines(item.school, 8.5, { leading: 11 }); y += 4; });
   }
   if (skills) { sectionHeading('Skills'); writeLines(skills, 9, { leading: 12 }); }
-  const filename = `${(document.querySelector('#exportFilename').value.trim() || basics.name || 'CV').replace(/\.pdf$/i, '')}.pdf`;
+  const filename = `${safeFilename(document.querySelector('#exportFilename').value || basics.name || 'CV')}.pdf`;
   doc.save(filename);
   setImportStatus('PDF downloaded');
 }
@@ -570,7 +581,7 @@ document.querySelector('#pdfInput').addEventListener('change', async (event) => 
   event.target.value = '';
 });
 document.querySelector('#exportFilename').addEventListener('input', (event) => { event.target.dataset.edited = 'true'; resumeData.exportName = event.target.value; scheduleSave(); });
-document.querySelector('#exportButton').addEventListener('click', () => { const blob = new Blob([JSON.stringify(toStorable(), null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${(document.querySelector('#exportFilename').value.trim() || resumeData.basics.name || 'CV').replace(/\.pdf$/i, '')}.json`; link.click(); URL.revokeObjectURL(link.href); });
+document.querySelector('#exportButton').addEventListener('click', () => { const blob = new Blob([JSON.stringify(toStorable(), null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${safeFilename(document.querySelector('#exportFilename').value || resumeData.basics.name || 'CV')}.json`; link.click(); URL.revokeObjectURL(link.href); });
 document.querySelector('#importButton').addEventListener('click', () => document.querySelector('#importInput').click());
 document.querySelector('#importInput').addEventListener('change', async (event) => {
   const [file] = event.target.files;
