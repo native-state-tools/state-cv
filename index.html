@@ -107,6 +107,11 @@
         <div class="paper-wrap"><article class="resume-paper" id="resumePreview"></article></div>
       </aside>
     </main>
+    <nav class="mobile-view-nav" aria-label="Editor navigation">
+      <button type="button" data-mobile-view-button="edit" aria-pressed="true">Edit</button>
+      <button type="button" data-mobile-view-button="preview" aria-pressed="false">Preview</button>
+      <button type="button" id="mobileExportButton" aria-label="Export PDF">Export</button>
+    </nav>
   </div>
   <template id="experienceTemplate">
     <article class="repeat-item"><button class="remove-item" type="button" title="Remove experience" aria-label="Remove experience">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>

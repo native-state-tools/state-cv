@@ -19,7 +19,7 @@ Then open `127.0.0.1:3000`. The server uses only Node's built-in modules and doe
 - JSON import and export for backup (imports up to 2 MB); backups are versioned and validated before use
 - PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
 - Native selectable-text PDF export in Letter or A4 format
-- Responsive editor and preview
+- Responsive editor, full-screen preview, and an Edit | Preview | Export bottom bar on screens narrower than 1024px
 - No account or external service required
 
 PDF import reads selectable text in the browser and maps common contact, summary, experience, education, and skills headings into the editor. It supports common single-column layouts, separate or combined role/company/date lines, numeric dates, month-name dates, and several heading variations. Image-only or scanned PDFs need OCR before they can be imported; heavily designed multi-column PDFs may still need a quick manual review because PDF text order is not standardized.

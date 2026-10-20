@@ -538,6 +538,18 @@ function exportPdf() {
   setImportStatus('PDF downloaded');
 }
 document.querySelector('#printButton').addEventListener('click', exportPdf);
+function setMobileView(view) {
+  document.querySelector('#appShell').dataset.mobileView = view;
+  document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.mobileViewButton === view));
+  });
+  if (view === 'edit') window.scrollTo({ top: 0, behavior: 'smooth' });
+  else window.scrollTo({ top: 0, behavior: 'auto' });
+}
+document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
+  button.addEventListener('click', () => setMobileView(button.dataset.mobileViewButton));
+});
+document.querySelector('#mobileExportButton').addEventListener('click', () => document.querySelector('#printButton').click());
 function updatePrintPageSize(size = document.querySelector('#paperSize').value) {
   const normalizedSize = size === 'a4' ? 'a4' : 'letter';
   document.documentElement.classList.toggle('page-a4', normalizedSize === 'a4');
