@@ -16,8 +16,8 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: radial-gradient(circle at 72% 4%, rgba(112, 73, 221, .22), transparent 32rem), var(--canvas); color: var(--ink); font-family: 'Segoe UI', Tahoma, sans-serif; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
-.launch-screen { align-items: center; background: radial-gradient(circle at 75% 20%, rgba(118, 81, 232, .28), transparent 32rem), var(--canvas); display: flex; justify-content: center; min-height: 100vh; overflow: hidden; position: relative; }
-.launch-screen.is-hidden { display: none; }
+.launch-screen { align-items: center; background: radial-gradient(circle at 75% 20%, rgba(118, 81, 232, .28), transparent 32rem); display: flex; inset: 0; justify-content: center; min-height: 100vh; overflow: hidden; position: fixed; z-index: 20; }
+.launch-screen.is-hidden { opacity: 0; pointer-events: none; transform: scale(1.02); transition: opacity .3s ease, transform .3s ease; }
 .launch-inner { max-width: 820px; padding: 54px 30px; position: relative; width: 100%; z-index: 1; }
 .launch-brand, .brand { align-items: center; color: var(--ink); display: flex; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; gap: 10px; }
 .launch-brand { font-size: 16px; font-weight: 600; }
