@@ -366,6 +366,8 @@ function showStorageConflict(revision) {
   notice.querySelector('#reloadLatestButton').hidden = false;
   notice.querySelector('#keepMineButton').hidden = false;
   notice.querySelector('#downloadDamagedButton').hidden = true;
+  notice.querySelector('#dismissStorageNoticeButton').hidden = true;
+  notice.querySelector('#dismissStorageNoticeButton').inert = true;
   notice.hidden = false;
   notice.inert = false;
 }
@@ -379,6 +381,8 @@ function showDamagedNotice(message) {
   notice.querySelector('#reloadLatestButton').hidden = true;
   notice.querySelector('#keepMineButton').hidden = true;
   notice.querySelector('#downloadDamagedButton').hidden = !damagedRaw;
+  notice.querySelector('#dismissStorageNoticeButton').hidden = false;
+  notice.querySelector('#dismissStorageNoticeButton').inert = false;
   notice.hidden = false;
   notice.inert = false;
 }
