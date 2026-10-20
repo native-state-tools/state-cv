@@ -9,6 +9,7 @@ const PDF_PARSE_TIMEOUT_MS = 30000;
 const MAX_PDF_PAGES = 20;
 const MAX_PDF_TEXT_CHARS = 200000;
 const isIosDevice = () => /iPad|iPhone|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const stateStorage = StateCVStorage();
 
 class ImportError extends Error {
   constructor(message) {
@@ -137,7 +138,7 @@ function toStorable() {
 
 function loadData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = stateStorage.getItem(STORAGE_KEY);
     return raw === null ? structuredClone(defaultData) : normalizeData(JSON.parse(raw), { strict: true });
   } catch (error) {
     storageLoadFailed = true;
@@ -152,7 +153,7 @@ function saveData() {
     return false;
   }
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStorable()));
+    stateStorage.setItem(STORAGE_KEY, JSON.stringify(toStorable()));
     setStatus('saved', 'Saved locally');
     return true;
   } catch (error) {
@@ -263,7 +264,7 @@ function openLaunchScreen() {
 
 function hasSavedDraft() {
   try {
-    return Boolean(localStorage.getItem(STORAGE_KEY));
+    return Boolean(stateStorage.getItem(STORAGE_KEY));
   } catch {
     return false;
   }
