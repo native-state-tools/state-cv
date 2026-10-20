@@ -1,5 +1,4 @@
 const STORAGE_KEY = 'state-cv-data-v1';
-const LEGACY_STORAGE_KEY = 'resume-forge-data-v1';
 const APP_NAME = 'State CV';
 const SCHEMA_VERSION = 1;
 const MAX_PDF_IMPORT_BYTES = 10 * 1024 * 1024;
@@ -132,14 +131,7 @@ function toStorable() {
 
 function loadData() {
   try {
-    let raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === null) {
-      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (legacy) {
-        raw = legacy;
-        try { localStorage.setItem(STORAGE_KEY, legacy); } catch { /* ignore quota */ }
-      }
-    }
+    const raw = localStorage.getItem(STORAGE_KEY);
     return raw === null ? structuredClone(defaultData) : normalizeData(JSON.parse(raw), { strict: true });
   } catch (error) {
     storageLoadFailed = true;
@@ -260,7 +252,7 @@ function openLaunchScreen() {
 
 function updateLaunchScreen() {
   let hasDraft = false;
-  try { hasDraft = Boolean(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)); } catch { hasDraft = false; }
+  try { hasDraft = Boolean(localStorage.getItem(STORAGE_KEY)); } catch { hasDraft = false; }
   const name = resumeData.basics.name.trim();
   document.querySelector('#continueLabel').textContent = hasDraft ? `Continue ${name || 'your CV'}` : 'Continue your CV';
   document.querySelector('#continueMeta').textContent = hasDraft ? 'Saved locally' : 'No saved draft yet';
