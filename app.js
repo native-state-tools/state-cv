@@ -28,6 +28,9 @@ const defaultData = {
 };
 
 let storageLoadFailed = false;
+let storageDamaged = false;
+let damagedRaw = null;
+let damagedCopyStored = false;
 let loadedRevision = 0;
 let storageConflict = false;
 let conflictingRevision = null;
@@ -152,24 +155,45 @@ function toStorable() {
 }
 
 function loadData() {
+  let raw;
   try {
-    const raw = stateStorage.getItem(STORAGE_KEY);
-    if (raw === null) {
-      loadedRevision = 0;
-      return structuredClone(defaultData);
-    }
+    raw = stateStorage.getItem(STORAGE_KEY);
+  } catch (error) {
+    storageLoadFailed = true;
+    console.error('State CV could not read saved data.', error);
+    return structuredClone(defaultData);
+  }
+  if (raw === null) {
+    loadedRevision = 0;
+    return structuredClone(defaultData);
+  }
+  try {
     const parsed = JSON.parse(raw);
     loadedRevision = stateStorage.getDataRevision(STORAGE_KEY);
     return normalizeData(parsed, { strict: true });
   } catch (error) {
-    storageLoadFailed = true;
-    console.error('State CV could not load saved data.', error);
+    preserveDamagedData(raw, error);
     return structuredClone(defaultData);
   }
 }
 
+function preserveDamagedData(raw, cause) {
+  storageLoadFailed = true;
+  storageDamaged = true;
+  damagedRaw = raw;
+  loadedRevision = 0;
+  try {
+    stateStorage.preserveDamagedData(raw);
+    damagedCopyStored = true;
+  } catch (error) {
+    damagedCopyStored = false;
+    console.error('State CV could not save a separate copy of damaged data.', error);
+  }
+  console.error('State CV found damaged saved data and will not replace it automatically.', cause);
+}
+
 function saveData({ force = false } = {}) {
-  if (storageLoadFailed) {
+  if (storageLoadFailed && !force) {
     setStatus('error', 'Saved data not replaced');
     return false;
   }
@@ -178,11 +202,18 @@ function saveData({ force = false } = {}) {
     return false;
   }
   try {
-    if (Date.now() - lastSnapshotAt >= 10 * 60 * 1000) snapshotLatestStored();
+    const replacingDamagedData = storageDamaged;
+    if (!storageLoadFailed && Date.now() - lastSnapshotAt >= 10 * 60 * 1000) snapshotLatestStored();
     loadedRevision = stateStorage.writeData(STORAGE_KEY, toStorable(), loadedRevision, force);
+    storageLoadFailed = false;
+    storageDamaged = false;
     storageConflict = false;
     conflictingRevision = null;
-    hideStorageNotice();
+    if (replacingDamagedData) {
+      showDamagedNotice('The original damaged data is preserved separately. Download it if you need the raw file.');
+    } else {
+      hideStorageNotice();
+    }
     setStatus('saved', 'Saved locally');
     return true;
   } catch (error) {
@@ -252,8 +283,40 @@ function showStorageConflict(revision) {
     'This CV was saved in another tab. Reload the latest version, or keep your changes and replace it.';
   notice.querySelector('#reloadLatestButton').hidden = false;
   notice.querySelector('#keepMineButton').hidden = false;
+  notice.querySelector('#downloadDamagedButton').hidden = true;
   notice.hidden = false;
   notice.inert = false;
+}
+
+function showDamagedNotice(message) {
+  const notice = document.querySelector('#storageNotice');
+  notice.querySelector('#storageNoticeMessage').textContent = message ||
+    (damagedCopyStored
+      ? 'Saved data could not be validated. A separate copy is preserved; import a backup or explicitly start a new CV before saving.'
+      : 'Saved data could not be validated, and the separate browser copy could not be saved. Download the raw data now; import a backup or explicitly start a new CV before saving.');
+  notice.querySelector('#reloadLatestButton').hidden = true;
+  notice.querySelector('#keepMineButton').hidden = true;
+  notice.querySelector('#downloadDamagedButton').hidden = !damagedRaw;
+  notice.hidden = false;
+  notice.inert = false;
+}
+
+function downloadDamagedData() {
+  let raw = damagedRaw;
+  try {
+    raw = stateStorage.getItem('state-cv-damaged-v1') ?? raw;
+  } catch (error) {
+    console.error('State CV could not read the preserved damaged-data copy.', error);
+  }
+  if (raw === null) {
+    setStatus('error', 'No damaged-data copy is available');
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
+  link.download = 'state-cv-damaged-data.json';
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function hideStorageNotice() {
@@ -286,6 +349,13 @@ function reloadLatestData() {
       console.error('State CV could not create a protective snapshot.', error.cause);
       return false;
     }
+    try {
+      const raw = stateStorage.getItem(STORAGE_KEY);
+      if (raw !== null) preserveDamagedData(raw, error);
+    } catch (readError) {
+      console.error('State CV could not preserve the latest saved data.', readError);
+    }
+    showDamagedNotice();
     setStatus('error', 'Latest version could not be loaded');
     console.error('State CV could not reload the latest saved data.', error);
   }
@@ -307,10 +377,15 @@ function keepMine() {
 window.addEventListener('storage', (event) => {
   if (event.key !== STORAGE_KEY) return;
   try {
+    if (event.newValue !== null) {
+      const parsed = JSON.parse(event.newValue);
+      normalizeData(parsed, { strict: true });
+    }
     const revision = event.newValue === null ? 0 : stateStorage.getDataRevision(STORAGE_KEY);
     if (revision !== loadedRevision) showStorageConflict(revision);
   } catch (error) {
-    showStorageConflict(null);
+    if (event.newValue !== null) preserveDamagedData(event.newValue, error);
+    showDamagedNotice();
   }
 });
 
@@ -359,10 +434,66 @@ function updatePreview({ force = false } = {}) {
   updateWorkspaceName();
   if (!force && getComputedStyle(document.querySelector('#previewPanel')).display === 'none') return;
   const { basics, summary, experience, education, skills } = resumeData;
-  const contact = [basics.location, basics.email, basics.phone, basics.website].filter(Boolean).map(escapeHtml).map((value) => `<span>${value}</span>`).join('');
-  const experienceHtml = experience.filter((item) => item.role || item.company || item.highlights).map((item) => `<div class="resume-entry"><div class="entry-top"><strong class="entry-role">${escapeHtml(item.role || 'Role')}</strong><span class="entry-date">${escapeHtml(item.dates)}</span></div><div class="entry-company">${escapeHtml(item.company)}</div>${item.highlights ? `<ul class="entry-bullets">${item.highlights.split('\n').filter(Boolean).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}</ul>` : ''}</div>`).join('');
-  const educationHtml = education.filter((item) => item.degree || item.school).map((item) => `<div class="resume-entry"><div class="entry-top"><strong class="entry-role">${escapeHtml(item.degree || 'Degree')}</strong><span class="entry-date">${escapeHtml(item.dates)}</span></div><div class="entry-company">${escapeHtml(item.school)}</div></div>`).join('');
-  document.querySelector('#resumePreview').innerHTML = `<header class="resume-header"><h2>${escapeHtml(basics.name || 'Your Name')}</h2><div class="resume-title">${escapeHtml(basics.title || 'Professional Title')}</div><div class="resume-contact">${contact || '<span>City, State</span><span>email@example.com</span><span>(555) 123-4567</span>'}</div></header>${summary ? `<section class="resume-section"><h3>Professional Summary</h3><p class="skills-line">${escapeHtml(summary)}</p></section>` : ''}${experienceHtml ? `<section class="resume-section"><h3>Experience</h3>${experienceHtml}</section>` : ''}${educationHtml ? `<section class="resume-section"><h3>Education</h3>${educationHtml}</section>` : ''}${skills ? `<section class="resume-section"><h3>Skills</h3><p class="skills-line">${escapeHtml(skills)}</p></section>` : ''}${!summary && !experienceHtml && !educationHtml && !skills ? '<p class="empty-preview">Your CV will appear here as you build it.<br />Start with your contact details.</p>' : ''}`;
+  const preview = document.querySelector('#resumePreview');
+  preview.replaceChildren();
+  const element = (tag, className, text = '') => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    node.textContent = text;
+    return node;
+  };
+  const header = element('header', 'resume-header');
+  header.append(element('h2', '', basics.name || 'Your Name'));
+  header.append(element('div', 'resume-title', basics.title || 'Professional Title'));
+  const contact = element('div', 'resume-contact');
+  const contactValues = [basics.location, basics.email, basics.phone, basics.website].filter(Boolean);
+  (contactValues.length ? contactValues : ['City, State', 'email@example.com', '(555) 123-4567'])
+    .forEach((value) => contact.append(element('span', '', value)));
+  header.append(contact);
+  preview.append(header);
+
+  const appendSection = (title) => {
+    const section = element('section', 'resume-section');
+    section.append(element('h3', '', title));
+    preview.append(section);
+    return section;
+  };
+  if (summary) appendSection('Professional Summary').append(element('p', 'skills-line', summary));
+  const visibleExperience = experience.filter((item) => item.role || item.company || item.highlights);
+  if (visibleExperience.length) {
+    const section = appendSection('Experience');
+    visibleExperience.forEach((item) => {
+      const entry = element('div', 'resume-entry');
+      const top = element('div', 'entry-top');
+      top.append(element('strong', 'entry-role', item.role || 'Role'));
+      top.append(element('span', 'entry-date', item.dates));
+      entry.append(top, element('div', 'entry-company', item.company));
+      if (item.highlights) {
+        const bullets = element('ul', 'entry-bullets');
+        item.highlights.split('\n').filter(Boolean).forEach((bullet) => bullets.append(element('li', '', bullet)));
+        entry.append(bullets);
+      }
+      section.append(entry);
+    });
+  }
+  const visibleEducation = education.filter((item) => item.degree || item.school);
+  if (visibleEducation.length) {
+    const section = appendSection('Education');
+    visibleEducation.forEach((item) => {
+      const entry = element('div', 'resume-entry');
+      const top = element('div', 'entry-top');
+      top.append(element('strong', 'entry-role', item.degree || 'Degree'));
+      top.append(element('span', 'entry-date', item.dates));
+      entry.append(top, element('div', 'entry-company', item.school));
+      section.append(entry);
+    });
+  }
+  if (skills) appendSection('Skills').append(element('p', 'skills-line', skills));
+  if (!summary && !visibleExperience.length && !visibleEducation.length && !skills) {
+    const empty = element('p', 'empty-preview', 'Your CV will appear here as you build it.');
+    empty.append(document.createElement('br'), document.createTextNode('Start with your contact details.'));
+    preview.append(empty);
+  }
 }
 
 function updateCompletion() {
@@ -427,9 +558,10 @@ function startNewCv({ confirmReplacement = true } = {}) {
     return;
   }
   resumeData = structuredClone(defaultData);
-  storageLoadFailed = false;
   document.querySelector('#exportFilename').removeAttribute('data-edited');
-  renderFields(); updatePreview(); updateCompletion(); saveData(); closeLaunchScreen();
+  renderFields(); updatePreview(); updateCompletion();
+  const saved = saveData({ force: storageLoadFailed || storageDamaged });
+  if (saved) closeLaunchScreen();
 }
 
 async function extractPdfText(file) {
@@ -626,9 +758,8 @@ function importPdfLines(lines) {
   renderFields();
   updatePreview();
   updateCompletion();
-  storageLoadFailed = false;
-  saveData();
-  return { sections: Object.keys(sections).filter((key) => sections[key].length), experience: importedExperience.length, education: importedEducation.length };
+  const saved = saveData({ force: storageLoadFailed || storageDamaged });
+  return { sections: Object.keys(sections).filter((key) => sections[key].length), experience: importedExperience.length, education: importedEducation.length, saved };
 }
 
 document.querySelectorAll('[data-path]').forEach((field) => field.addEventListener('input', () => { setValue(field.dataset.path, field.value); if (field.dataset.path === 'summary') updateSummaryCount(); updatePreview(); updateCompletion(); scheduleSave(); }));
@@ -733,10 +864,12 @@ window.matchMedia('(min-width: 1024px)').addEventListener('change', () => update
 document.querySelector('#desktopPreviewButton').addEventListener('click', () => {
   const button = document.querySelector('#desktopPreviewButton');
   const isHidden = document.querySelector('#appShell').dataset.previewHidden !== 'true';
+  const preview = document.querySelector('#previewPanel');
+  if (isHidden && preview.contains(document.activeElement)) button.focus();
   document.querySelector('#appShell').dataset.previewHidden = String(isHidden);
   button.setAttribute('aria-expanded', String(!isHidden));
   button.textContent = isHidden ? 'Show preview' : 'Hide preview';
-  document.querySelector('#previewPanel').setAttribute('aria-hidden', String(isHidden));
+  preview.inert = isHidden;
   if (!isHidden) updatePreview();
 });
 const moreMenu = document.querySelector('.more-menu');
@@ -782,6 +915,10 @@ async function handlePdfImport(file) {
     if (!lines.length) throw new ImportError('This PDF has no selectable text. Try an OCR-enabled PDF.');
     takeSnapshot();
     const imported = importPdfLines(lines);
+    if (!imported.saved) {
+      setImportStatus('PDF imported in this tab, but it could not be saved locally', true);
+      return;
+    }
     setImportStatus(`PDF imported · ${imported.experience + imported.education} entries`);
     closeLaunchScreen();
   } catch (error) {
@@ -841,8 +978,9 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
       takeSnapshot();
       resumeData = normalized;
       document.querySelector('#exportFilename').removeAttribute('data-edited');
-      renderFields(); updatePreview(); updateCompletion(); storageLoadFailed = false; saveData();
-      closeLaunchScreen();
+      renderFields(); updatePreview(); updateCompletion();
+      const saved = saveData({ force: storageLoadFailed || storageDamaged });
+      if (saved) closeLaunchScreen();
     } catch (error) {
       if (error instanceof ImportError) {
         const message = `That backup could not be imported. ${error.message}`;
@@ -864,13 +1002,22 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
 document.querySelector('#resumeForm').addEventListener('submit', (event) => event.preventDefault());
 document.querySelector('#reloadLatestButton').addEventListener('click', reloadLatestData);
 document.querySelector('#keepMineButton').addEventListener('click', keepMine);
+document.querySelector('#downloadDamagedButton').addEventListener('click', downloadDamagedData);
 
 renderFields();
 updatePreview();
 updateCompletion();
 updatePrintPageSize();
 updateLaunchScreen();
-if (storageLoadFailed) setImportStatus('Saved data could not be loaded', true);
+if (storageDamaged) showDamagedNotice();
+else if (storageLoadFailed) {
+  setImportStatus('Saved data could not be loaded; saving is blocked', true);
+  const notice = document.querySelector('#storageNotice');
+  notice.querySelector('#storageNoticeMessage').textContent =
+    'Browser storage could not be read. State CV will not overwrite saved data.';
+  notice.hidden = false;
+  notice.inert = false;
+}
 document.querySelector('#brandHome').addEventListener('click', (event) => { event.preventDefault(); openLaunchScreen(); });
 document.querySelector('#continueButton').addEventListener('click', closeLaunchScreen);
 document.querySelector('#newCvButton').addEventListener('click', () => {

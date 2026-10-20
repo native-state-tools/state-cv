@@ -103,7 +103,13 @@
       },
       writeData(key, data, expectedRevision, force = false) {
         const target = requireStorage();
-        const currentRevision = parseRevision(target.getItem(key));
+        let currentRevision;
+        try {
+          currentRevision = parseRevision(target.getItem(key));
+        } catch (error) {
+          if (!force) throw error;
+          currentRevision = expectedRevision;
+        }
         if (!force && currentRevision !== expectedRevision) {
           const conflictError = new Error('Saved data changed in another tab.');
           conflictError.code = 'conflict';
@@ -122,6 +128,9 @@
         const snapshots = readSnapshots(target);
         snapshots.push(snapshot);
         return writeSnapshotList(target, snapshots);
+      },
+      preserveDamagedData(raw) {
+        writeDataWithEviction(requireStorage(), 'state-cv-damaged-v1', raw);
       }
     };
   }

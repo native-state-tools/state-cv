@@ -15,6 +15,12 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <section class="storage-notice" id="storageNotice" role="status" aria-live="polite" hidden inert>
+    <p id="storageNoticeMessage"></p>
+    <button class="button button-dark" id="reloadLatestButton" type="button" hidden>Reload latest</button>
+    <button class="button button-accent" id="keepMineButton" type="button" hidden>Keep mine</button>
+    <button class="button button-dark" id="downloadDamagedButton" type="button" hidden>Download damaged data</button>
+  </section>
   <section class="launch-screen" id="launchScreen" aria-label="State CV start screen">
     <div class="launch-glow launch-glow-one"></div>
     <div class="launch-glow launch-glow-two"></div>
@@ -58,12 +64,6 @@
         <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden />
       </div>
     </header>
-
-    <section class="storage-notice" id="storageNotice" role="status" aria-live="polite" hidden inert>
-      <p id="storageNoticeMessage"></p>
-      <button class="button button-dark" id="reloadLatestButton" type="button" hidden>Reload latest</button>
-      <button class="button button-accent" id="keepMineButton" type="button" hidden>Keep mine</button>
-    </section>
 
     <main class="workspace">
       <section class="editor-panel" aria-label="CV editor">
