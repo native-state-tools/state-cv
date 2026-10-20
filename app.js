@@ -261,17 +261,23 @@ function openLaunchScreen() {
   appShell.inert = true;
 }
 
+function hasSavedDraft() {
+  try {
+    return Boolean(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
 function updateLaunchScreen() {
-  let hasDraft = false;
-  try { hasDraft = Boolean(localStorage.getItem(STORAGE_KEY)); } catch { hasDraft = false; }
+  const hasDraft = hasSavedDraft();
   const name = resumeData.basics.name.trim();
   document.querySelector('#continueLabel').textContent = hasDraft ? `Continue ${name || 'your CV'}` : 'Continue your CV';
   document.querySelector('#continueMeta').textContent = hasDraft ? 'Saved locally' : 'No saved draft yet';
-  document.querySelector('#newCvButton').hidden = !hasDraft;
 }
 
-function startNewCv() {
-  if (!window.confirm('Starting a new CV will replace the current CV. Continue?')) return;
+function startNewCv({ confirmReplacement = true } = {}) {
+  if (confirmReplacement && !window.confirm('Starting a new CV will replace the current CV. Continue?')) return;
   resumeData = structuredClone(defaultData);
   storageLoadFailed = false;
   document.querySelector('#exportFilename').removeAttribute('data-edited');
@@ -707,7 +713,7 @@ if (storageLoadFailed) setImportStatus('Saved data could not be loaded', true);
 document.querySelector('#brandHome').addEventListener('click', (event) => { event.preventDefault(); openLaunchScreen(); });
 document.querySelector('#continueButton').addEventListener('click', closeLaunchScreen);
 document.querySelector('#newCvButton').addEventListener('click', () => {
-  startNewCv();
+  startNewCv({ confirmReplacement: hasSavedDraft() });
 });
 document.querySelector('#startNewCvButton').addEventListener('click', startNewCv);
 document.querySelector('#launchImportButton').addEventListener('click', () => document.querySelector('#pdfInput').click());

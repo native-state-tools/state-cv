@@ -28,7 +28,6 @@ button { cursor: pointer; }
 .launch-intro { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 22px 0 0; max-width: 450px; }
 .launch-actions { display: grid; gap: 12px; grid-template-columns: repeat(3, 1fr); }
 .launch-card { align-items: center; background: rgba(255, 255, 255, .04); border: 1px solid #393158; border-radius: 10px; color: var(--ink); display: flex; gap: 12px; min-height: 88px; padding: 16px; text-align: left; transition: background .2s, border-color .2s, transform .2s; }
-#newCvButton[hidden] { display: none; }
 .launch-card:hover { background: rgba(118, 81, 232, .18); border-color: #8062e7; transform: translateY(-3px); }
 .launch-card-primary { background: linear-gradient(135deg, #3c2778, #251947); border-color: #8062e7; }
 .launch-card-icon { align-items: center; background: var(--accent); border-radius: 7px; color: #17132d; display: inline-flex; flex: 0 0 auto; font-size: 22px; height: 34px; justify-content: center; width: 34px; }
