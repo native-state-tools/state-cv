@@ -93,7 +93,7 @@
         return requireStorage().getItem(key);
       },
       setItem(key, value) {
-        requireStorage().setItem(key, value);
+        writeDataWithEviction(requireStorage(), key, value);
       },
       removeItem(key) {
         requireStorage().removeItem(key);

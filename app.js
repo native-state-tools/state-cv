@@ -34,9 +34,21 @@ let damagedCopyStored = false;
 let loadedRevision = 0;
 let storageConflict = false;
 let conflictingRevision = null;
+let persistenceResult = 'unknown';
+let persistenceRequestStarted = false;
 let lastSnapshotAt = Date.now();
 let resumeData = loadData();
 let saveTimer;
+
+try {
+  const storedPersistenceResult = stateStorage.getItem('state-cv-persistence-v1');
+  if (['granted', 'not granted', 'unavailable'].includes(storedPersistenceResult)) {
+    persistenceResult = storedPersistenceResult;
+    persistenceRequestStarted = true;
+  }
+} catch (error) {
+  console.error('State CV could not read its local persistence status.', error);
+}
 
 try {
   const snapshots = stateStorage.readSnapshots();
@@ -215,6 +227,7 @@ function saveData({ force = false } = {}) {
       hideStorageNotice();
     }
     setStatus('saved', 'Saved locally');
+    requestStoragePersistence();
     return true;
   } catch (error) {
     if (error.code === 'snapshot') {
@@ -231,6 +244,29 @@ function saveData({ force = false } = {}) {
     console.error('State CV could not save locally.', error);
     return false;
   }
+}
+
+async function requestStoragePersistence() {
+  if (persistenceRequestStarted) return;
+  persistenceRequestStarted = true;
+  let result = 'unavailable';
+  try {
+    const storageManager = navigator.storage;
+    if (storageManager && typeof storageManager.persist === 'function') {
+      result = await storageManager.persist() ? 'granted' : 'not granted';
+    }
+  } catch (error) {
+    result = 'not granted';
+    console.error('State CV could not request persistent browser storage.', error);
+  }
+  persistenceResult = result;
+  try {
+    stateStorage.setItem('state-cv-persistence-v1', result);
+  } catch (error) {
+    console.error('State CV could not record the browser persistence result.', error);
+    setStatus('error', 'Persistence result could not be recorded');
+  }
+  if (typeof renderYourDataDialog === 'function') renderYourDataDialog();
 }
 
 function takeSnapshot(data = toStorable(), revision = loadedRevision) {
