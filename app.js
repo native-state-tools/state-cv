@@ -569,8 +569,11 @@ function setMobileView(view) {
   document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.mobileViewButton === view));
   });
-  if (view === 'edit') window.requestAnimationFrame(() => window.scrollTo({ top: editViewScrollY, behavior: 'instant' }));
-  else window.scrollTo({ top: 0, behavior: 'instant' });
+  if (view === 'edit' && currentView === 'preview') {
+    window.requestAnimationFrame(() => window.scrollTo({ top: editViewScrollY, behavior: 'instant' }));
+  } else if (view === 'preview') {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
   if (view === 'preview') updatePreview();
 }
 document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
