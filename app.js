@@ -283,6 +283,18 @@ async function requestStoragePersistence() {
 function takeSnapshot(data = toStorable(), revision = loadedRevision, minimumIntervalMs = 0) {
   let snapshots;
   try {
+    const normalizedData = normalizeData(data, { strict: true });
+    snapshots = stateStorage.readSnapshots();
+    const serializedData = JSON.stringify(normalizedData);
+    if (serializedData === JSON.stringify(defaultData)) return;
+    const newestSnapshot = snapshots.at(-1);
+    if (newestSnapshot?.data) {
+      try {
+        if (JSON.stringify(normalizeData(newestSnapshot.data, { strict: true })) === serializedData) return;
+      } catch (error) {
+        console.error('State CV could not compare the latest snapshot before adding another.', error);
+      }
+    }
     snapshots = stateStorage.addSnapshot({
       savedAt: new Date().toISOString(),
       revision,
