@@ -267,9 +267,11 @@ function updateLaunchScreen() {
   const name = resumeData.basics.name.trim();
   document.querySelector('#continueLabel').textContent = hasDraft ? `Continue ${name || 'your CV'}` : 'Continue your CV';
   document.querySelector('#continueMeta').textContent = hasDraft ? 'Saved locally' : 'No saved draft yet';
+  document.querySelector('#newCvButton').hidden = !hasDraft;
 }
 
 function startNewCv() {
+  if (!window.confirm('Starting a new CV will replace the current CV. Continue?')) return;
   resumeData = structuredClone(defaultData);
   storageLoadFailed = false;
   document.querySelector('#exportFilename').removeAttribute('data-edited');
