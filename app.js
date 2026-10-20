@@ -214,7 +214,11 @@ function saveData({ force = false } = {}) {
   try {
     const replacingDamagedData = storageDamaged;
     if (!storageLoadFailed && Date.now() - lastSnapshotAt >= 10 * 60 * 1000) {
-      snapshotLatestStored(10 * 60 * 1000);
+      try {
+        snapshotLatestStored(10 * 60 * 1000);
+      } catch (error) {
+        console.error('State CV could not create a periodic snapshot; continuing with the local save.', error);
+      }
     }
     const data = { ...toStorable(), savedAt: new Date().toISOString() };
     loadedRevision = stateStorage.writeData(STORAGE_KEY, data, loadedRevision, force);
