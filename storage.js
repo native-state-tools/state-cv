@@ -123,9 +123,12 @@
       readSnapshots() {
         return readSnapshots(requireStorage());
       },
-      addSnapshot(snapshot) {
+      addSnapshot(snapshot, minimumIntervalMs = 0) {
         const target = requireStorage();
         const snapshots = readSnapshots(target);
+        const lastSnapshotTime = Date.parse(snapshots.at(-1)?.savedAt || '');
+        if (minimumIntervalMs > 0 && Number.isFinite(lastSnapshotTime) &&
+            Date.now() - lastSnapshotTime < minimumIntervalMs) return snapshots;
         snapshots.push(snapshot);
         return writeSnapshotList(target, snapshots);
       },

@@ -213,7 +213,9 @@ function saveData({ force = false } = {}) {
   }
   try {
     const replacingDamagedData = storageDamaged;
-    if (!storageLoadFailed && Date.now() - lastSnapshotAt >= 10 * 60 * 1000) snapshotLatestStored();
+    if (!storageLoadFailed && Date.now() - lastSnapshotAt >= 10 * 60 * 1000) {
+      snapshotLatestStored(10 * 60 * 1000);
+    }
     const data = { ...toStorable(), savedAt: new Date().toISOString() };
     loadedRevision = stateStorage.writeData(STORAGE_KEY, data, loadedRevision, force);
     storageLoadFailed = false;
@@ -274,14 +276,14 @@ async function requestStoragePersistence() {
   }
 }
 
-function takeSnapshot(data = toStorable(), revision = loadedRevision) {
+function takeSnapshot(data = toStorable(), revision = loadedRevision, minimumIntervalMs = 0) {
   let snapshots;
   try {
     snapshots = stateStorage.addSnapshot({
       savedAt: new Date().toISOString(),
       revision,
       data: structuredClone(data)
-    });
+    }, minimumIntervalMs);
   } catch (error) {
     const snapshotError = new Error('Could not save a protective snapshot.');
     snapshotError.code = 'snapshot';
@@ -292,16 +294,16 @@ function takeSnapshot(data = toStorable(), revision = loadedRevision) {
   lastSnapshotAt = Number.isFinite(savedAt) ? savedAt : Date.now();
 }
 
-function snapshotLatestStored() {
+function snapshotLatestStored(minimumIntervalMs = 0) {
   const raw = stateStorage.getItem(STORAGE_KEY);
   if (raw === null) {
-    takeSnapshot();
+    takeSnapshot(undefined, undefined, minimumIntervalMs);
     return true;
   }
   const parsed = JSON.parse(raw);
   const revision = stateStorage.getDataRevision(STORAGE_KEY);
   const data = normalizeData(parsed, { strict: true });
-  takeSnapshot({ schemaVersion: SCHEMA_VERSION, ...data }, revision);
+  takeSnapshot({ schemaVersion: SCHEMA_VERSION, ...data }, revision, minimumIntervalMs);
   return true;
 }
 
