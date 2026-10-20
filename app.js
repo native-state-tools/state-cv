@@ -1,7 +1,8 @@
 const STORAGE_KEY = 'state-cv-data-v1';
 const LEGACY_STORAGE_KEY = 'resume-forge-data-v1';
 const APP_NAME = 'State CV';
-const MAX_IMPORT_FILE_SIZE = 25 * 1024 * 1024;
+const MAX_PDF_IMPORT_BYTES = 10 * 1024 * 1024;
+const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
 const PDF_PARSE_TIMEOUT_MS = 30000;
 const MAX_PDF_PAGES = 20;
 const MAX_PDF_TEXT_CHARS = 200000;
@@ -470,9 +471,9 @@ document.querySelector('#paperSize').addEventListener('change', (event) => updat
 document.querySelector('#importPdfButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 async function handlePdfImport(file) {
   if (!file) return;
-  if (file.size > MAX_IMPORT_FILE_SIZE) {
+  if (file.size > MAX_PDF_IMPORT_BYTES) {
     setImportStatus('PDF is too large', true);
-    alert('Please choose a PDF smaller than 25 MB.');
+    alert(`Please choose a PDF smaller than ${MAX_PDF_IMPORT_BYTES / (1024 * 1024)} MB.`);
     return;
   }
   setImportStatus('Reading PDF...');
@@ -506,9 +507,9 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
   const [file] = event.target.files;
   if (!file) return;
   if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) await handlePdfImport(file);
-  else if (file.size > MAX_IMPORT_FILE_SIZE) {
+  else if (file.size > MAX_JSON_IMPORT_BYTES) {
     setImportStatus('Backup file is too large', true);
-    alert('Please choose a backup file smaller than 25 MB.');
+    alert(`Please choose a backup file smaller than ${MAX_JSON_IMPORT_BYTES / (1024 * 1024)} MB.`);
   } else {
     try {
       const imported = JSON.parse(await file.text());
