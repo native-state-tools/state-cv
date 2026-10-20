@@ -554,13 +554,17 @@ function exportPdf() {
   setImportStatus(isIosDevice() ? 'If PDF opens, tap Share > Save to Files' : 'PDF downloaded');
 }
 document.querySelector('#printButton').addEventListener('click', exportPdf);
+let editViewScrollY = 0;
 function setMobileView(view) {
-  document.querySelector('#appShell').dataset.mobileView = view;
+  const appShell = document.querySelector('#appShell');
+  const currentView = appShell.dataset.mobileView || 'edit';
+  if (view === 'preview' && currentView !== 'preview') editViewScrollY = window.scrollY;
+  appShell.dataset.mobileView = view;
   document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.mobileViewButton === view));
   });
-  if (view === 'edit') window.scrollTo({ top: 0, behavior: 'smooth' });
-  else window.scrollTo({ top: 0, behavior: 'auto' });
+  if (view === 'edit') window.requestAnimationFrame(() => window.scrollTo({ top: editViewScrollY, behavior: 'instant' }));
+  else window.scrollTo({ top: 0, behavior: 'instant' });
   if (view === 'preview') updatePreview();
 }
 document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
@@ -585,6 +589,9 @@ function closeMoreMenu({ returnFocus = false } = {}) {
   moreMenu.open = false;
   if (returnFocus) moreMenuButton.focus();
 }
+document.addEventListener('pointerdown', (event) => {
+  if (moreMenu.open && !moreMenu.contains(event.target)) closeMoreMenu();
+});
 moreMenu.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.preventDefault();
