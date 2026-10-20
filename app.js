@@ -214,9 +214,9 @@ function updateWorkspaceName() {
   if (filename && !filename.dataset.edited) filename.value = resumeData.exportName || (name ? `${name} CV` : 'Untitled CV');
 }
 
-function updatePreview() {
+function updatePreview({ force = false } = {}) {
   updateWorkspaceName();
-  if (getComputedStyle(document.querySelector('#previewPanel')).display === 'none') return;
+  if (!force && getComputedStyle(document.querySelector('#previewPanel')).display === 'none') return;
   const { basics, summary, experience, education, skills } = resumeData;
   const contact = [basics.location, basics.email, basics.phone, basics.website].filter(Boolean).map(escapeHtml).map((value) => `<span>${value}</span>`).join('');
   const experienceHtml = experience.filter((item) => item.role || item.company || item.highlights).map((item) => `<div class="resume-entry"><div class="entry-top"><strong class="entry-role">${escapeHtml(item.role || 'Role')}</strong><span class="entry-date">${escapeHtml(item.dates)}</span></div><div class="entry-company">${escapeHtml(item.company)}</div>${item.highlights ? `<ul class="entry-bullets">${item.highlights.split('\n').filter(Boolean).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}</ul>` : ''}</div>`).join('');
@@ -567,6 +567,8 @@ document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
   button.addEventListener('click', () => setMobileView(button.dataset.mobileViewButton));
 });
 document.querySelector('#mobileExportButton').addEventListener('click', () => document.querySelector('#printButton').click());
+window.addEventListener('beforeprint', () => updatePreview({ force: true }));
+window.matchMedia('(min-width: 1024px)').addEventListener('change', () => updatePreview());
 document.querySelector('#desktopPreviewButton').addEventListener('click', () => {
   const button = document.querySelector('#desktopPreviewButton');
   const isHidden = document.querySelector('#appShell').dataset.previewHidden !== 'true';
