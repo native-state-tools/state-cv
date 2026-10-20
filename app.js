@@ -552,13 +552,12 @@ function clearAllData() {
   const dialogStatus = document.querySelector('#dataDialogStatus');
   if (!clearDataConfirmed) {
     clearDataConfirmed = true;
-    button.textContent = 'Click again to clear all data';
+    button.textContent = 'Click again to clear (download a backup first)';
     clearDataConfirmationTimer = setTimeout(resetClearDataConfirmation, 5000);
     return;
   }
   resetClearDataConfirmation();
   try {
-    takeSnapshot();
     cancelScheduledSave();
     stateStorage.clearAll();
     resumeData = structuredClone(defaultData);
