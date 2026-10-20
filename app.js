@@ -1300,6 +1300,7 @@ document.querySelector('#resumeForm').addEventListener('submit', (event) => even
 document.querySelector('#reloadLatestButton').addEventListener('click', reloadLatestData);
 document.querySelector('#keepMineButton').addEventListener('click', keepMine);
 document.querySelector('#downloadDamagedButton').addEventListener('click', downloadDamagedData);
+document.querySelector('#dismissStorageNoticeButton').addEventListener('click', hideStorageNotice);
 
 renderFields();
 updatePreview();
