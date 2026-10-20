@@ -131,6 +131,34 @@
       },
       preserveDamagedData(raw) {
         writeDataWithEviction(requireStorage(), 'state-cv-damaged-v1', raw);
+      },
+      clearAll() {
+        const target = requireStorage();
+        const keys = [
+          'state-cv-snapshots-v1',
+          'state-cv-damaged-v1',
+          'state-cv-persistence-v1',
+          'state-cv-data-v1'
+        ];
+        const previous = new Map(keys.map((key) => [key, target.getItem(key)]));
+        try {
+          keys.forEach((key) => target.removeItem(key));
+        } catch (error) {
+          let restoreError = null;
+          previous.forEach((value, key) => {
+            if (value === null) return;
+            try {
+              target.setItem(key, value);
+            } catch (failure) {
+              restoreError = failure;
+            }
+          });
+          const clearError = new Error(restoreError
+            ? 'Clear all data failed and some saved items could not be restored.'
+            : 'Clear all data failed; the saved items were restored.');
+          clearError.cause = error;
+          throw clearError;
+        }
       }
     };
   }

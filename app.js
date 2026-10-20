@@ -33,7 +33,6 @@ let damagedRaw = null;
 let damagedCopyStored = false;
 let loadedRevision = 0;
 let storageConflict = false;
-let conflictingRevision = null;
 let persistenceResult = 'unknown';
 let persistenceRequestStarted = false;
 let lastSnapshotAt = Date.now();
@@ -63,7 +62,6 @@ try {
 
 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
 
-const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 function safeFilename(value, fallback = 'CV') {
   const filename = String(value)
     .replace(/\.(?:pdf|json)$/i, '')
@@ -216,11 +214,11 @@ function saveData({ force = false } = {}) {
   try {
     const replacingDamagedData = storageDamaged;
     if (!storageLoadFailed && Date.now() - lastSnapshotAt >= 10 * 60 * 1000) snapshotLatestStored();
-    loadedRevision = stateStorage.writeData(STORAGE_KEY, toStorable(), loadedRevision, force);
+    const data = { ...toStorable(), savedAt: new Date().toISOString() };
+    loadedRevision = stateStorage.writeData(STORAGE_KEY, data, loadedRevision, force);
     storageLoadFailed = false;
     storageDamaged = false;
     storageConflict = false;
-    conflictingRevision = null;
     if (replacingDamagedData) {
       showDamagedNotice('The original damaged data is preserved separately. Download it if you need the raw file.');
     } else {
@@ -266,7 +264,14 @@ async function requestStoragePersistence() {
     console.error('State CV could not record the browser persistence result.', error);
     setStatus('error', 'Persistence result could not be recorded');
   }
-  if (typeof renderYourDataDialog === 'function') renderYourDataDialog();
+  const persistenceNode = document.querySelector('#dataPersistenceStatus');
+  if (persistenceNode) {
+    persistenceNode.textContent = result === 'granted'
+      ? 'Granted'
+      : result === 'not granted'
+        ? 'Not granted'
+        : 'Unavailable in this browser context';
+  }
 }
 
 function takeSnapshot(data = toStorable(), revision = loadedRevision) {
@@ -307,13 +312,19 @@ function scheduleSave() {
 }
 
 function flushScheduledSave() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
   saveData();
+}
+
+function cancelScheduledSave() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
 }
 
 function showStorageConflict(revision) {
   storageConflict = true;
-  conflictingRevision = revision;
   const notice = document.querySelector('#storageNotice');
   notice.querySelector('#storageNoticeMessage').textContent =
     'This CV was saved in another tab. Reload the latest version, or keep your changes and replace it.';
@@ -348,16 +359,224 @@ function downloadDamagedData() {
     setStatus('error', 'No damaged-data copy is available');
     return;
   }
+  downloadFile(new Blob([raw], { type: 'application/json' }), 'state-cv-damaged-data.json');
+}
+
+function downloadBackup() {
+  downloadFile(
+    new Blob([JSON.stringify(toStorable(), null, 2)], { type: 'application/json' }),
+    `${safeFilename(document.querySelector('#exportFilename').value || resumeData.basics.name || 'CV')}.json`
+  );
+}
+
+function downloadFile(blob, filename) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
-  link.download = 'state-cv-damaged-data.json';
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(link.href);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function formatStoredDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'Unknown'
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
+function formatStoredSize(bytes) {
+  if (bytes < 1024) return `About ${bytes} bytes`;
+  return `About ${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function renderYourDataDialog() {
+  const dialogStatus = document.querySelector('#dataDialogStatus');
+  const lastSaved = document.querySelector('#dataLastSaved');
+  const storedSize = document.querySelector('#dataStoredSize');
+  const persistenceStatus = document.querySelector('#dataPersistenceStatus');
+  const snapshotsList = document.querySelector('#snapshotsList');
+  const snapshotsEmpty = document.querySelector('#snapshotsEmpty');
+  const damagedDownloadButton = document.querySelector('#downloadDamagedDialogButton');
+  if (!dialogStatus) return;
+
+  dialogStatus.textContent = '';
+  let approxBytes = 0;
+  let latestSavedAt = null;
+  let damaged = damagedRaw;
+  let storedDataRaw = null;
+  try {
+    ['state-cv-data-v1', 'state-cv-snapshots-v1', 'state-cv-damaged-v1', 'state-cv-persistence-v1'].forEach((key) => {
+      const value = stateStorage.getItem(key);
+      if (value !== null) {
+        approxBytes += (key.length + value.length) * 2;
+        if (key === 'state-cv-data-v1') storedDataRaw = value;
+        if (key === 'state-cv-damaged-v1') damaged = value;
+      }
+    });
+    if (storedDataRaw !== null) {
+      try {
+        latestSavedAt = JSON.parse(storedDataRaw).savedAt || null;
+      } catch (error) {
+        lastSaved.textContent = 'Saved data needs attention';
+      }
+    }
+    if (storedDataRaw === null || latestSavedAt) {
+      lastSaved.textContent = latestSavedAt ? formatStoredDate(latestSavedAt) : 'Not saved yet';
+    } else {
+      lastSaved.textContent = 'Time not recorded for this draft';
+    }
+    storedSize.textContent = formatStoredSize(approxBytes);
+  } catch (error) {
+    lastSaved.textContent = 'Could not read';
+    storedSize.textContent = 'Could not calculate';
+    dialogStatus.textContent = 'Some local storage details could not be read.';
+    console.error('State CV could not read storage details for Your data.', error);
+  }
+  persistenceStatus.textContent = persistenceResult === 'granted'
+    ? 'Granted'
+    : persistenceResult === 'not granted'
+      ? 'Not granted'
+      : persistenceResult === 'unavailable'
+        ? 'Unavailable in this browser context'
+        : 'Not requested yet';
+  damagedDownloadButton.hidden = !damaged;
+  damagedDownloadButton.inert = !damaged;
+  snapshotsList.replaceChildren();
+
+  let snapshots = [];
+  try {
+    snapshots = stateStorage.readSnapshots();
+  } catch (error) {
+    dialogStatus.textContent = 'Saved snapshots could not be read.';
+    console.error('State CV could not render saved snapshots.', error);
+  }
+  let validSnapshots = 0;
+  let invalidSnapshots = 0;
+  snapshots.slice(-5).forEach((snapshot, offset) => {
+    const index = snapshots.length - 1 - offset;
+    let normalized;
+    if (!snapshot || typeof snapshot.savedAt !== 'string' || !Number.isInteger(snapshot.revision) ||
+        snapshot.revision < 0 || !Number.isFinite(Date.parse(snapshot.savedAt))) {
+      invalidSnapshots++;
+      return;
+    }
+    try {
+      normalized = normalizeData(snapshot.data, { strict: true });
+    } catch (error) {
+      invalidSnapshots++;
+      return;
+    }
+    validSnapshots++;
+    const item = document.createElement('article');
+    item.className = 'snapshot-item';
+    const label = document.createElement('p');
+    label.textContent = `${formatStoredDate(snapshot.savedAt)} · Revision ${snapshot.revision}`;
+    const restoreButton = document.createElement('button');
+    restoreButton.className = 'button button-dark';
+    restoreButton.type = 'button';
+    restoreButton.textContent = 'Restore';
+    restoreButton.addEventListener('click', () => restoreSnapshot(index, normalized));
+    item.append(label, restoreButton);
+    snapshotsList.append(item);
+  });
+  if (invalidSnapshots) dialogStatus.textContent = 'One or more saved snapshots could not be validated and are unavailable for restore.';
+  snapshotsEmpty.hidden = validSnapshots > 0;
+  snapshotsEmpty.inert = validSnapshots > 0;
+}
+
+function restoreSnapshot(index, normalizedData) {
+  if (storageConflict) {
+    document.querySelector('#dataDialogStatus').textContent = 'Resolve the other-tab change before restoring a snapshot.';
+    return;
+  }
+  try {
+    takeSnapshot();
+    if (!storageLoadFailed) {
+      const currentRevision = stateStorage.getDataRevision(STORAGE_KEY);
+      if (currentRevision !== loadedRevision) {
+        showStorageConflict(currentRevision);
+        document.querySelector('#dataDialogStatus').textContent = 'This CV changed in another tab. Resolve that change before restoring.';
+        return;
+      }
+    }
+    cancelScheduledSave();
+    resumeData = structuredClone(normalizedData);
+    document.querySelector('#exportFilename').removeAttribute('data-edited');
+    renderFields(); updatePreview(); updateCompletion();
+    const saved = saveData({ force: storageLoadFailed || storageDamaged });
+    renderYourDataDialog();
+    document.querySelector('#dataDialogStatus').textContent = saved
+      ? 'Snapshot restored and saved.'
+      : 'Snapshot loaded in this tab but could not be saved.';
+  } catch (error) {
+    document.querySelector('#dataDialogStatus').textContent = error.code === 'snapshot'
+      ? 'Could not protect the current CV; restore was stopped.'
+      : 'This snapshot could not be restored.';
+    console.error(`State CV could not restore snapshot ${index}.`, error);
+  }
+}
+
+function openYourDataDialog() {
+  renderYourDataDialog();
+  document.querySelector('#yourDataDialog').showModal();
+}
+
+function closeYourDataDialog() {
+  if (document.querySelector('#yourDataDialog').open) document.querySelector('#yourDataDialog').close();
+}
+
+let clearDataConfirmationTimer;
+let clearDataConfirmed = false;
+function resetClearDataConfirmation() {
+  clearDataConfirmed = false;
+  const button = document.querySelector('#clearDataButton');
+  button.textContent = 'Clear all data';
+  clearTimeout(clearDataConfirmationTimer);
+}
+
+function clearAllData() {
+  const button = document.querySelector('#clearDataButton');
+  const dialogStatus = document.querySelector('#dataDialogStatus');
+  if (!clearDataConfirmed) {
+    clearDataConfirmed = true;
+    button.textContent = 'Click again to clear all data';
+    clearDataConfirmationTimer = setTimeout(resetClearDataConfirmation, 5000);
+    return;
+  }
+  resetClearDataConfirmation();
+  try {
+    takeSnapshot();
+    cancelScheduledSave();
+    stateStorage.clearAll();
+    resumeData = structuredClone(defaultData);
+    loadedRevision = 0;
+    storageLoadFailed = false;
+    storageDamaged = false;
+    storageConflict = false;
+    damagedRaw = null;
+    damagedCopyStored = false;
+    persistenceResult = 'unknown';
+    persistenceRequestStarted = false;
+    renderFields(); updatePreview(); updateCompletion(); updateLaunchScreen();
+    hideStorageNotice();
+    dialogStatus.textContent = 'All State CV data was cleared from this browser.';
+    renderYourDataDialog();
+    document.querySelector('#dataDialogStatus').textContent = 'All State CV data was cleared from this browser.';
+  } catch (error) {
+    dialogStatus.textContent = 'Could not clear all data. The current CV was preserved where possible.';
+    console.error('State CV could not clear all local data.', error);
+  }
 }
 
 function hideStorageNotice() {
   const notice = document.querySelector('#storageNotice');
-  if (notice.contains(document.activeElement)) document.querySelector('#brandHome').focus();
+  if (notice.contains(document.activeElement)) {
+    const focusTarget = document.querySelector('#appShell').inert ? '#continueButton' : '#brandHome';
+    document.querySelector(focusTarget).focus();
+  }
   notice.inert = true;
   notice.hidden = true;
 }
@@ -366,25 +585,31 @@ function reloadLatestData() {
   try {
     const raw = stateStorage.getItem(STORAGE_KEY);
     if (raw === null) {
+      cancelScheduledSave();
       resumeData = structuredClone(defaultData);
       loadedRevision = 0;
+      storageLoadFailed = false;
+      storageDamaged = false;
+      damagedRaw = null;
+      damagedCopyStored = false;
     } else {
       const parsed = JSON.parse(raw);
       const normalized = normalizeData(parsed, { strict: true });
       loadedRevision = stateStorage.getDataRevision(STORAGE_KEY);
+      cancelScheduledSave();
       resumeData = normalized;
     }
+    storageLoadFailed = false;
+    storageDamaged = false;
     storageConflict = false;
-    conflictingRevision = null;
     renderFields(); updatePreview(); updateCompletion(); updateLaunchScreen();
-    hideStorageNotice();
+    if (damagedRaw) {
+      showDamagedNotice('An earlier damaged data copy remains preserved separately. Download it if you need the raw file.');
+    } else {
+      hideStorageNotice();
+    }
     setStatus('saved', 'Latest version loaded');
   } catch (error) {
-    if (error.code === 'snapshot') {
-      setStatus('error', 'Snapshot failed; local save paused');
-      console.error('State CV could not create a protective snapshot.', error.cause);
-      return false;
-    }
     try {
       const raw = stateStorage.getItem(STORAGE_KEY);
       if (raw !== null) preserveDamagedData(raw, error);
@@ -400,8 +625,9 @@ function reloadLatestData() {
 function keepMine() {
   if (!storageConflict) return;
   try {
+    cancelScheduledSave();
     const currentRevision = stateStorage.getDataRevision(STORAGE_KEY);
-    if (currentRevision !== loadedRevision) snapshotLatestStored();
+    snapshotLatestStored();
     loadedRevision = currentRevision;
     saveData({ force: true });
   } catch (error) {
@@ -572,7 +798,9 @@ function openLaunchScreen() {
 function hasSavedDraft() {
   try {
     return Boolean(stateStorage.getItem(STORAGE_KEY));
-  } catch {
+  } catch (error) {
+    storageLoadFailed = true;
+    console.error('State CV could not check for a saved draft.', error);
     return false;
   }
 }
@@ -588,6 +816,7 @@ function startNewCv({ confirmReplacement = true } = {}) {
   if (confirmReplacement && !window.confirm('Starting a new CV will replace the current CV. Continue?')) return;
   try {
     takeSnapshot();
+    cancelScheduledSave();
   } catch (error) {
     setStatus('error', 'Could not protect the current CV');
     console.error('State CV could not create a snapshot before starting a new CV.', error);
@@ -763,6 +992,7 @@ function parseEducation(lines) {
 }
 
 function importPdfLines(lines) {
+  cancelScheduledSave();
   const text = lines.join('\n');
   const sections = splitPdfSections(lines);
   const email = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/i)?.[0] || '';
@@ -978,7 +1208,24 @@ document.querySelector('#pdfInput').addEventListener('change', async (event) => 
   event.target.value = '';
 });
 document.querySelector('#exportFilename').addEventListener('input', (event) => { event.target.dataset.edited = 'true'; resumeData.exportName = event.target.value; scheduleSave(); });
-document.querySelector('#exportButton').addEventListener('click', () => { const blob = new Blob([JSON.stringify(toStorable(), null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${safeFilename(document.querySelector('#exportFilename').value || resumeData.basics.name || 'CV')}.json`; link.click(); URL.revokeObjectURL(link.href); });
+document.querySelector('#exportButton').addEventListener('click', downloadBackup);
+document.querySelector('#yourDataButton').addEventListener('click', openYourDataDialog);
+document.querySelector('#closeYourDataButton').addEventListener('click', closeYourDataDialog);
+document.querySelector('#closeYourDataFooterButton').addEventListener('click', closeYourDataDialog);
+document.querySelector('#yourDataDialog').addEventListener('close', () => moreMenuButton.focus());
+document.querySelector('#yourDataDialog').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeYourDataDialog();
+  }
+});
+document.querySelector('#yourDataDialog').addEventListener('cancel', (event) => {
+  event.preventDefault();
+  closeYourDataDialog();
+});
+document.querySelector('#downloadBackupButton').addEventListener('click', downloadBackup);
+document.querySelector('#downloadDamagedDialogButton').addEventListener('click', downloadDamagedData);
+document.querySelector('#clearDataButton').addEventListener('click', clearAllData);
 document.querySelector('#importButton').addEventListener('click', () => document.querySelector('#importInput').click());
 document.querySelector('#importInput').addEventListener('change', async (event) => {
   const [file] = event.target.files;
@@ -1011,6 +1258,7 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
     }
     try {
       const normalized = normalizeData(imported, { strict: true });
+      cancelScheduledSave();
       takeSnapshot();
       resumeData = normalized;
       document.querySelector('#exportFilename').removeAttribute('data-edited');

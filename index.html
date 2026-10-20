@@ -55,6 +55,7 @@
           <summary class="button button-ghost" aria-controls="moreMenuContent">More</summary>
           <div class="more-menu-content" id="moreMenuContent">
             <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup (JSON)</button>
+            <button class="button button-dark" id="yourDataButton" type="button">Your data</button>
             <label class="paper-size-control" title="Choose your PDF page size"><span>PDF page size</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
             <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
             <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
@@ -126,6 +127,30 @@
       <button type="button" id="mobileExportButton" aria-label="Export PDF">Export</button>
     </nav>
   </div>
+  <dialog class="data-dialog" id="yourDataDialog" aria-labelledby="yourDataTitle">
+    <div class="data-dialog-header">
+      <div><p class="eyebrow">Local workspace</p><h2 id="yourDataTitle">Your data</h2></div>
+      <button class="icon-button" id="closeYourDataButton" type="button" aria-label="Close Your data">×</button>
+    </div>
+    <dl class="data-summary">
+      <div><dt>Last saved</dt><dd id="dataLastSaved">Not saved yet</dd></div>
+      <div><dt>Approximate stored size</dt><dd id="dataStoredSize">Calculating…</dd></div>
+      <div><dt>Browser persistence</dt><dd id="dataPersistenceStatus">Not requested yet</dd></div>
+    </dl>
+    <p class="data-dialog-note">Storage behavior can differ when opening index.html directly from your device; this does not imply the same behavior as the hosted site.</p>
+    <section class="data-snapshots" aria-labelledby="snapshotsTitle">
+      <h3 id="snapshotsTitle">Recent snapshots</h3>
+      <p id="snapshotsEmpty">No snapshots yet.</p>
+      <div id="snapshotsList"></div>
+    </section>
+    <p class="data-dialog-status" id="dataDialogStatus" role="status" aria-live="polite"></p>
+    <div class="data-dialog-actions">
+      <button class="button button-dark" id="downloadBackupButton" type="button">Download backup</button>
+      <button class="button button-dark" id="downloadDamagedDialogButton" type="button" hidden inert>Download damaged data</button>
+      <button class="button button-caution" id="clearDataButton" type="button">Clear all data</button>
+      <button class="button button-ghost" id="closeYourDataFooterButton" type="button">Close</button>
+    </div>
+  </dialog>
   <template id="experienceTemplate">
     <article class="repeat-item"><button class="remove-item" type="button" title="Remove experience" aria-label="Remove experience">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>
   </template>
