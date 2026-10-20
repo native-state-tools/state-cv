@@ -308,7 +308,10 @@ function snapshotLatestStored() {
 function scheduleSave() {
   setStatus('saving', 'Saving...');
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveData, 350);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    saveData();
+  }, 350);
 }
 
 function flushScheduledSave() {
