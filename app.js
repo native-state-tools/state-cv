@@ -2,6 +2,11 @@ const STORAGE_KEY = 'state-cv-data-v1';
 const LEGACY_STORAGE_KEY = 'resume-forge-data-v1';
 const APP_NAME = 'State CV';
 const MAX_IMPORT_FILE_SIZE = 25 * 1024 * 1024;
+const PDF_PARSE_TIMEOUT_MS = 30000;
+const MAX_PDF_PAGES = 20;
+const MAX_PDF_TEXT_CHARS = 200000;
+
+class ImportError extends Error {}
 
 const defaultData = {
   basics: { name: '', title: '', location: '', email: '', phone: '', website: '' },
@@ -189,24 +194,51 @@ function updateLaunchScreen() {
 async function extractPdfText(file) {
   if (!window.pdfjsLib) throw new Error('PDF reader is unavailable. The local vendor files may be missing.');
   const buffer = await file.arrayBuffer();
-  const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
-  if (pdf.numPages > 100) throw new Error('PDF has too many pages to import safely.');
-  const pages = [];
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const rows = [];
-    content.items.filter((item) => item.str.trim()).forEach((item) => {
-      const x = item.transform[4];
-      const y = item.transform[5];
-      const row = rows.find((candidate) => Math.abs(candidate.y - y) < 4);
-      if (row) row.items.push({ x, text: item.str });
-      else rows.push({ y, items: [{ x, text: item.str }] });
+  const loadingTask = window.pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+    isEvalSupported: false,
+    enableXfa: false,
+    disableFontFace: true,
+    useWorkerFetch: false,
+    verbosity: 0
+  });
+  let timeoutId;
+  const parseDocument = async () => {
+    const pdf = await loadingTask.promise;
+    if (pdf.numPages > MAX_PDF_PAGES) throw new ImportError(`PDFs must have ${MAX_PDF_PAGES} pages or fewer.`);
+    const pages = [];
+    let textChars = 0;
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const rows = [];
+      content.items.forEach((item) => {
+        textChars += item.str.length;
+        if (textChars > MAX_PDF_TEXT_CHARS) throw new ImportError('This PDF contains too much text to import.');
+        if (!item.str.trim()) return;
+        const x = item.transform[4];
+        const y = item.transform[5];
+        const row = rows.find((candidate) => Math.abs(candidate.y - y) < 4);
+        if (row) row.items.push({ x, text: item.str });
+        else rows.push({ y, items: [{ x, text: item.str }] });
+      });
+      pages.push(rows.sort((a, b) => b.y - a.y).map((row) => row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(' ').replace(/\s*@\s*/g, '@').replace(/\s+/g, ' ').trim()).filter(Boolean));
+    }
+    const appChrome = new RegExp(`^\\d{1,2}\\/\\d{1,2}\\/\\d{2,4},?\\s+.*${APP_NAME.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')} \\| .*`, 'i');
+    return pages.flat().filter((line) => line && !appChrome.test(line) && !/^localhost:\d+\s+\d+\/\d+$/i.test(line));
+  };
+  try {
+    const timeout = new Promise((resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        loadingTask.destroy().catch(() => {});
+        reject(new ImportError(`PDF reading timed out after ${PDF_PARSE_TIMEOUT_MS / 1000} seconds.`));
+      }, PDF_PARSE_TIMEOUT_MS);
     });
-    pages.push(rows.sort((a, b) => b.y - a.y).map((row) => row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(' ').replace(/\s*@\s*/g, '@').replace(/\s+/g, ' ').trim()).filter(Boolean));
+    return await Promise.race([parseDocument(), timeout]);
+  } finally {
+    clearTimeout(timeoutId);
+    await loadingTask.destroy().catch(() => {});
   }
-  const appChrome = new RegExp(`^\\d{1,2}\\/\\d{1,2}\\/\\d{2,4},?\\s+.*${APP_NAME.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')} \\| .*`, 'i');
-  return pages.flat().filter((line) => line && !appChrome.test(line) && !/^localhost:\d+\s+\d+\/\d+$/i.test(line));
 }
 
 function sectionType(line) {
@@ -349,6 +381,7 @@ function importPdfLines(lines) {
   if (sections.skills?.length) resumeData.skills = sections.skills.join(', ').split(',').map((skill) => cleanImportedLine(skill.trim())).filter(Boolean).join(', ');
   if (importedExperience.length) resumeData.experience = importedExperience;
   if (importedEducation.length) resumeData.education = importedEducation;
+  resumeData = normalizeData(resumeData, { strict: false });
   renderFields();
   updatePreview();
   updateCompletion();
@@ -445,13 +478,20 @@ async function handlePdfImport(file) {
   setImportStatus('Reading PDF...');
   try {
     const lines = await extractPdfText(file);
-    if (!lines.length) throw new Error('No selectable text found.');
+    if (!lines.length) throw new ImportError('This PDF has no selectable text. Try an OCR-enabled PDF.');
     const imported = importPdfLines(lines);
     setImportStatus(`PDF imported · ${imported.experience + imported.education} entries`);
     closeLaunchScreen();
   } catch (error) {
-    setImportStatus(error.message === 'No selectable text found.' ? 'Scanned PDF needs OCR' : 'PDF import failed', true);
-    alert(error.message === 'No selectable text found.' ? 'This PDF is image-based, so it has no selectable text to import. Try an OCR-enabled PDF.' : error.message);
+    if (error instanceof ImportError) {
+      setImportStatus(error.message, true);
+      alert(error.message);
+    } else {
+      console.error('State CV could not read the PDF.', error);
+      const message = 'That PDF could not be read. It may be damaged or password protected.';
+      setImportStatus(message, true);
+      alert(message);
+    }
   }
 }
 document.querySelector('#pdfInput').addEventListener('change', async (event) => {
