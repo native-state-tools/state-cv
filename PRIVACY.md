@@ -10,6 +10,8 @@ State CV is a local-first application. This is the complete list of what it does
 
 - **Storage is browser-local.** Drafts are saved in your browser's local storage and never leave your device. Clearing your browsing data or switching browsers means starting fresh — use the built-in Backup (JSON) feature to keep copies. If a saved draft cannot be read, State CV reports the problem and avoids overwriting it until you import a backup or explicitly start a new CV.
 
+- **Files are checked on this device.** Backup files and PDFs are checked before use, with size limits. A file that fails validation never replaces the current CV. Backups include a schema version.
+
 - **No liability for lost drafts.** Because data lives only in your browser, the operator accepts no responsibility for lost work. Back up what matters to you.
 
 This policy applies to the application at this repository and its hosted version.

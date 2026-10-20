@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'state-cv-data-v1';
 const LEGACY_STORAGE_KEY = 'resume-forge-data-v1';
 const APP_NAME = 'State CV';
+const SCHEMA_VERSION = 1;
 const MAX_PDF_IMPORT_BYTES = 10 * 1024 * 1024;
 const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
 const PDF_PARSE_TIMEOUT_MS = 30000;
@@ -36,35 +37,97 @@ const setValue = (path, value) => {
   target[lastKey] = value;
 };
 
-function normalizeData(data = {}) {
-  const experience = Array.isArray(data.experience) ? data.experience : [];
-  const education = Array.isArray(data.education) ? data.education : [];
-  const basics = data.basics && typeof data.basics === 'object' ? data.basics : {};
-  const text = (value, fallback = '') => typeof value === 'string' ? value : fallback;
-  const normalizeRecord = (record, defaults) => Object.fromEntries(Object.keys(defaults).map((key) => [key, text(record?.[key])]));
-  return {
-    ...structuredClone(defaultData),
-    basics: Object.fromEntries(Object.keys(defaultData.basics).map((key) => [key, text(basics[key])])),
-    exportName: text(data.exportName),
-    summary: text(data.summary),
-    skills: text(data.skills),
-    experience: experience.map((record) => normalizeRecord(record, defaultData.experience[0])),
-    education: education.map((record) => normalizeRecord(record, defaultData.education[0]))
+function normalizeData(data, { strict = false } = {}) {
+  const isPlainObject = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
   };
+  const reject = (message) => { throw new ImportError(message); };
+  if (!isPlainObject(data)) reject('The file is not a State CV backup.');
+  if (Object.hasOwn(data, 'schemaVersion')) {
+    if (!Number.isInteger(data.schemaVersion) || data.schemaVersion < 1) reject('This backup has an invalid schema version.');
+    if (data.schemaVersion > SCHEMA_VERSION) reject('This backup was made by a newer version of State CV.');
+  }
+  const normalizeText = (value, field, maxLength) => {
+    if (value === undefined) return '';
+    if (typeof value !== 'string') {
+      if (strict) reject(`${field} must be a string.`);
+      return '';
+    }
+    const cleaned = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+    if (cleaned.length > maxLength) {
+      if (strict) reject(`${field} is longer than ${maxLength} characters.`);
+      return cleaned.slice(0, maxLength);
+    }
+    return cleaned;
+  };
+  const normalizeObject = (value, field) => {
+    if (value === undefined) return {};
+    if (isPlainObject(value)) return value;
+    if (strict) reject(`${field} must be an object.`);
+    return {};
+  };
+  const normalizeRecords = (value, field, maxEntries, fields) => {
+    if (value === undefined) value = [];
+    if (!Array.isArray(value)) {
+      if (strict) reject(`${field} must be an array.`);
+      value = [];
+    }
+    if (value.length > maxEntries) {
+      if (strict) reject(`${field} has more than ${maxEntries} entries.`);
+      value = value.slice(0, maxEntries);
+    }
+    return value.map((record, index) => {
+      if (!isPlainObject(record)) {
+        if (strict) reject(`${field} entry ${index + 1} must be an object.`);
+        record = {};
+      }
+      return Object.fromEntries(fields.map(([key, maxLength]) => [
+        key,
+        normalizeText(record[key], `${field} ${key}`, maxLength)
+      ]));
+    });
+  };
+  const basicsData = normalizeObject(data.basics, 'basics');
+  const experience = normalizeRecords(data.experience, 'experience', 30, [
+    ['role', 200], ['company', 200], ['dates', 100], ['highlights', 10000]
+  ]);
+  const education = normalizeRecords(data.education, 'education', 20, [
+    ['degree', 200], ['school', 200], ['dates', 100]
+  ]);
+  return {
+    basics: {
+      name: normalizeText(basicsData.name, 'basics name', 200),
+      title: normalizeText(basicsData.title, 'basics title', 200),
+      location: normalizeText(basicsData.location, 'basics location', 200),
+      email: normalizeText(basicsData.email, 'basics email', 254),
+      phone: normalizeText(basicsData.phone, 'basics phone', 40),
+      website: normalizeText(basicsData.website, 'basics website', 300)
+    },
+    exportName: normalizeText(data.exportName, 'exportName', 120),
+    summary: normalizeText(data.summary, 'summary', 500),
+    experience: experience.length ? experience : [{ role: '', company: '', dates: '', highlights: '' }],
+    education: education.length ? education : [{ degree: '', school: '', dates: '' }],
+    skills: normalizeText(data.skills, 'skills', 2000)
+  };
+}
+
+function toStorable() {
+  return { schemaVersion: SCHEMA_VERSION, ...resumeData };
 }
 
 function loadData() {
   try {
     let raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
+    if (raw === null) {
       const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
       if (legacy) {
         raw = legacy;
         try { localStorage.setItem(STORAGE_KEY, legacy); } catch { /* ignore quota */ }
       }
     }
-    const stored = raw ? JSON.parse(raw) : null;
-    return stored ? normalizeData(stored) : structuredClone(defaultData);
+    return raw === null ? structuredClone(defaultData) : normalizeData(JSON.parse(raw), { strict: true });
   } catch (error) {
     storageLoadFailed = true;
     console.error('State CV could not load saved data.', error);
@@ -80,7 +143,7 @@ function saveData() {
     return false;
   }
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(resumeData));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStorable()));
     status.className = 'save-status saved';
     status.innerHTML = '<span class="status-dot"></span>Saved locally';
     return true;
@@ -501,7 +564,7 @@ document.querySelector('#pdfInput').addEventListener('change', async (event) => 
   event.target.value = '';
 });
 document.querySelector('#exportFilename').addEventListener('input', (event) => { event.target.dataset.edited = 'true'; resumeData.exportName = event.target.value; scheduleSave(); });
-document.querySelector('#exportButton').addEventListener('click', () => { const blob = new Blob([JSON.stringify(resumeData, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${(document.querySelector('#exportFilename').value.trim() || resumeData.basics.name || 'CV').replace(/\.pdf$/i, '')}.json`; link.click(); URL.revokeObjectURL(link.href); });
+document.querySelector('#exportButton').addEventListener('click', () => { const blob = new Blob([JSON.stringify(toStorable(), null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${(document.querySelector('#exportFilename').value.trim() || resumeData.basics.name || 'CV').replace(/\.pdf$/i, '')}.json`; link.click(); URL.revokeObjectURL(link.href); });
 document.querySelector('#importButton').addEventListener('click', () => document.querySelector('#importInput').click());
 document.querySelector('#importInput').addEventListener('change', async (event) => {
   const [file] = event.target.files;
@@ -511,13 +574,45 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
     setImportStatus('Backup file is too large', true);
     alert(`Please choose a backup file smaller than ${MAX_JSON_IMPORT_BYTES / (1024 * 1024)} MB.`);
   } else {
+    let fileText;
     try {
-      const imported = JSON.parse(await file.text());
-      resumeData = normalizeData(imported);
+      fileText = await file.text();
+    } catch (error) {
+      const message = 'That file could not be read as a State CV JSON export.';
+      console.error('State CV could not read the JSON backup.', error);
+      setImportStatus(message, true);
+      alert(message);
+      event.target.value = '';
+      return;
+    }
+    let imported;
+    try {
+      imported = JSON.parse(fileText);
+    } catch {
+      const message = 'That file is not valid JSON.';
+      setImportStatus(message, true);
+      alert(message);
+      event.target.value = '';
+      return;
+    }
+    try {
+      const normalized = normalizeData(imported, { strict: true });
+      resumeData = normalized;
       document.querySelector('#exportFilename').removeAttribute('data-edited');
       renderFields(); updatePreview(); updateCompletion(); storageLoadFailed = false; saveData();
       closeLaunchScreen();
-    } catch { alert('That file could not be read as a State CV JSON export.'); }
+    } catch (error) {
+      if (error instanceof ImportError) {
+        const message = `That backup could not be imported. ${error.message}`;
+        setImportStatus(message, true);
+        alert(message);
+      } else {
+        const message = 'That file could not be read as a State CV JSON export.';
+        console.error('State CV could not import the JSON backup.', error);
+        setImportStatus(message, true);
+        alert(message);
+      }
+    }
   }
   event.target.value = '';
 });
