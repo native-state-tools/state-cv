@@ -488,6 +488,11 @@ function renderYourDataDialog() {
 }
 
 function restoreSnapshot(index, normalizedData) {
+  if (storageLoadFailed) {
+    document.querySelector('#dataDialogStatus').textContent =
+      'Import a JSON backup or explicitly start a new CV before replacing damaged or unreadable saved data.';
+    return;
+  }
   if (storageConflict) {
     document.querySelector('#dataDialogStatus').textContent = 'Resolve the other-tab change before restoring a snapshot.';
     return;
@@ -506,7 +511,7 @@ function restoreSnapshot(index, normalizedData) {
     resumeData = structuredClone(normalizedData);
     document.querySelector('#exportFilename').removeAttribute('data-edited');
     renderFields(); updatePreview(); updateCompletion();
-    const saved = saveData({ force: storageLoadFailed || storageDamaged });
+    const saved = saveData();
     renderYourDataDialog();
     document.querySelector('#dataDialogStatus').textContent = saved
       ? 'Snapshot restored and saved.'
@@ -1024,7 +1029,7 @@ function importPdfLines(lines) {
   renderFields();
   updatePreview();
   updateCompletion();
-  const saved = saveData({ force: storageLoadFailed || storageDamaged });
+  const saved = saveData();
   return { sections: Object.keys(sections).filter((key) => sections[key].length), experience: importedExperience.length, education: importedEducation.length, saved };
 }
 
@@ -1170,6 +1175,10 @@ document.querySelector('#paperSize').addEventListener('change', (event) => updat
 document.querySelector('#importPdfButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 async function handlePdfImport(file) {
   if (!file) return;
+  if (storageLoadFailed) {
+    setImportStatus('Import a JSON backup or explicitly start a new CV before replacing unreadable saved data', true);
+    return;
+  }
   if (file.size > MAX_PDF_IMPORT_BYTES) {
     setImportStatus('PDF is too large', true);
     alert(`Please choose a PDF smaller than ${MAX_PDF_IMPORT_BYTES / (1024 * 1024)} MB.`);

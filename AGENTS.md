@@ -19,6 +19,7 @@
 
 - Prefer vanilla JavaScript and existing local helpers over adding a framework or abstraction. Keep state normalization and storage behavior deterministic.
 - Keep the existing public file layout and vendored dependency approach unless the task requires a migration.
+- A root-level `storage.js` is approved for Phase 2 local-storage work.
 - For a new native project, prefer Tauri with vanilla HTML/CSS/JS. Android via Tauri or Capacitor is the next target; do not add iOS support unless explicitly requested. Challenge Firebase/Supabase, auth, analytics, auto-sync, Electron, and framework lock-in because they conflict with the project profile.
 - For a new repository, create `ARCHITECTURE.md` and `PRIVACY.md` before application code, and include `LICENSE`, `README.md`, and `src/storage.js`. Do not create those scaffolding files as unrelated work in this existing State CV repository.
 
