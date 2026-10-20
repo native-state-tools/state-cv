@@ -138,29 +138,23 @@ function loadData() {
 }
 
 function saveData() {
-  const status = document.querySelector('#saveStatus');
   if (storageLoadFailed) {
-    status.className = 'save-status error';
-    status.innerHTML = '<span class="status-dot"></span>Saved data not replaced';
+    setStatus('error', 'Saved data not replaced');
     return false;
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toStorable()));
-    status.className = 'save-status saved';
-    status.innerHTML = '<span class="status-dot"></span>Saved locally';
+    setStatus('saved', 'Saved locally');
     return true;
   } catch (error) {
-    status.className = 'save-status error';
-    status.innerHTML = '<span class="status-dot"></span>Local save unavailable';
+    setStatus('error', 'Local save unavailable');
     console.error('State CV could not save locally.', error);
     return false;
   }
 }
 
 function scheduleSave() {
-  const status = document.querySelector('#saveStatus');
-  status.className = 'save-status saving';
-  status.innerHTML = '<span class="status-dot"></span>Saving...';
+  setStatus('saving', 'Saving...');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveData, 350);
 }
@@ -186,7 +180,7 @@ function renderRepeaters() {
 
 function renderRepeater(listId, templateId, items, createBlankRecord) {
   const list = document.querySelector(`#${listId}`);
-  list.innerHTML = '';
+  list.replaceChildren();
   items.forEach((item, index) => {
     const node = document.querySelector(`#${templateId}`).content.cloneNode(true);
     node.querySelectorAll('[data-key]').forEach((field) => {
@@ -229,11 +223,15 @@ function updateCompletion() {
   document.querySelector('#completionRing').className = `completion-ring progress-${progress}`;
 }
 
-function setImportStatus(message, isError = false) {
+function setStatus(state, message) {
   const status = document.querySelector('#saveStatus');
-  status.className = `save-status ${isError ? 'error' : 'saved'}`;
-  status.innerHTML = '<span class="status-dot"></span>' + message;
+  status.className = `save-status ${state}`;
+  const dot = document.createElement('span');
+  dot.className = 'status-dot';
+  status.replaceChildren(dot, document.createTextNode(message));
 }
+
+function setImportStatus(message, isError = false) { setStatus(isError ? 'error' : 'saved', message); }
 
 function closeLaunchScreen() {
   const launchScreen = document.querySelector('#launchScreen');
