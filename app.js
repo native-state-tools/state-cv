@@ -214,8 +214,9 @@ function updateWorkspaceName() {
 }
 
 function updatePreview() {
-  const { basics, summary, experience, education, skills } = resumeData;
   updateWorkspaceName();
+  if (getComputedStyle(document.querySelector('#previewPanel')).display === 'none') return;
+  const { basics, summary, experience, education, skills } = resumeData;
   const contact = [basics.location, basics.email, basics.phone, basics.website].filter(Boolean).map(escapeHtml).map((value) => `<span>${value}</span>`).join('');
   const experienceHtml = experience.filter((item) => item.role || item.company || item.highlights).map((item) => `<div class="resume-entry"><div class="entry-top"><strong class="entry-role">${escapeHtml(item.role || 'Role')}</strong><span class="entry-date">${escapeHtml(item.dates)}</span></div><div class="entry-company">${escapeHtml(item.company)}</div>${item.highlights ? `<ul class="entry-bullets">${item.highlights.split('\n').filter(Boolean).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join('')}</ul>` : ''}</div>`).join('');
   const educationHtml = education.filter((item) => item.degree || item.school).map((item) => `<div class="resume-entry"><div class="entry-top"><strong class="entry-role">${escapeHtml(item.degree || 'Degree')}</strong><span class="entry-date">${escapeHtml(item.dates)}</span></div><div class="entry-company">${escapeHtml(item.school)}</div></div>`).join('');
@@ -552,6 +553,7 @@ function setMobileView(view) {
   });
   if (view === 'edit') window.scrollTo({ top: 0, behavior: 'smooth' });
   else window.scrollTo({ top: 0, behavior: 'auto' });
+  if (view === 'preview') updatePreview();
 }
 document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
   button.addEventListener('click', () => setMobileView(button.dataset.mobileViewButton));
@@ -564,6 +566,7 @@ document.querySelector('#desktopPreviewButton').addEventListener('click', () => 
   button.setAttribute('aria-expanded', String(!isHidden));
   button.textContent = isHidden ? 'Show preview' : 'Hide preview';
   document.querySelector('#previewPanel').setAttribute('aria-hidden', String(isHidden));
+  if (!isHidden) updatePreview();
 });
 const moreMenu = document.querySelector('.more-menu');
 const moreMenuButton = moreMenu.querySelector('summary');
