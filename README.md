@@ -16,7 +16,7 @@ Then open `127.0.0.1:3000`. The server uses only Node's built-in modules and doe
 
 - Live ATS-friendly CV preview
 - Local autosave with revision checks for multi-tab edits and up to five recent recovery snapshots
-- A **Your data** dialog with the last-save time, approximate storage size, browser-persistence status, snapshot restore, backup download, damaged-data download, and two-step clear
+- A **Your data** dialog with the last-save time, approximate storage size, persistence request result and live browser status, snapshot restore, backup download, damaged-data download, and two-step clear
 - JSON import and export for backup (imports up to 2 MB); backups are versioned and validated before use
 - PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
 - Native selectable-text PDF export in Letter or A4 format
@@ -33,7 +33,7 @@ The `Export PDF` button creates a native Letter or A4 PDF with selectable text, 
 
 PDF.js 3.11.174 and jsPDF 2.5.1 are vendored locally in `vendor/`, fonts use local system stacks, and the Content Security Policy blocks external scripts, styles, fonts, images, workers, and connections. State CV can run with Wi-Fi disabled and makes no external network requests.
 
-Drafts, snapshots, damaged-data copies, and the browser-persistence result stay in local browser storage. After the first successful save, State CV requests persistent browser storage when the browser supports it and reports the result; persistence is not a substitute for downloading a JSON backup. Storage behavior may differ when opening `index.html` directly from the file system compared with the hosted site.
+Drafts, snapshots, damaged-data copies, and the browser-persistence request result stay in local browser storage. After the first successful save, State CV requests persistent browser storage when the browser supports it; if the request is not granted, it retries on later page loads. The **Your data** dialog shows both the saved request result and the browser's current persistence status when available. Persistence is not a substitute for downloading a JSON backup. Storage behavior may differ when opening `index.html` directly from the file system compared with the hosted site.
 
 ## License
 

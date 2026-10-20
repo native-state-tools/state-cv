@@ -43,7 +43,7 @@ try {
   const storedPersistenceResult = stateStorage.getItem('state-cv-persistence-v1');
   if (['granted', 'not granted', 'unavailable'].includes(storedPersistenceResult)) {
     persistenceResult = storedPersistenceResult;
-    persistenceRequestStarted = true;
+    persistenceRequestStarted = storedPersistenceResult === 'granted';
   }
 } catch (error) {
   console.error('State CV could not read its local persistence status.', error);
@@ -280,6 +280,20 @@ async function requestStoragePersistence() {
   }
 }
 
+async function updateLivePersistenceStatus(statusNode) {
+  try {
+    const storageManager = navigator.storage;
+    if (!storageManager || typeof storageManager.persisted !== 'function') {
+      statusNode.textContent = 'Unavailable';
+      return;
+    }
+    statusNode.textContent = await storageManager.persisted() ? 'Persistent' : 'Not persistent';
+  } catch (error) {
+    statusNode.textContent = 'Unavailable';
+    console.error('State CV could not read the current browser persistence status.', error);
+  }
+}
+
 function takeSnapshot(data = toStorable(), revision = loadedRevision, minimumIntervalMs = 0) {
   let snapshots;
   try {
@@ -418,6 +432,7 @@ function renderYourDataDialog() {
   const lastSaved = document.querySelector('#dataLastSaved');
   const storedSize = document.querySelector('#dataStoredSize');
   const persistenceStatus = document.querySelector('#dataPersistenceStatus');
+  const livePersistenceStatus = document.querySelector('#dataLivePersistenceStatus');
   const snapshotsList = document.querySelector('#snapshotsList');
   const snapshotsEmpty = document.querySelector('#snapshotsEmpty');
   const damagedDownloadButton = document.querySelector('#downloadDamagedDialogButton');
@@ -463,6 +478,8 @@ function renderYourDataDialog() {
       : persistenceResult === 'unavailable'
         ? 'Unavailable in this browser context'
         : 'Not requested yet';
+  livePersistenceStatus.textContent = 'Checking…';
+  updateLivePersistenceStatus(livePersistenceStatus);
   damagedDownloadButton.hidden = !damaged;
   damagedDownloadButton.inert = !damaged;
   snapshotsList.replaceChildren();
@@ -1332,6 +1349,7 @@ else if (storageLoadFailed) {
   notice.hidden = false;
   notice.inert = false;
 }
+if (persistenceResult !== 'granted' && hasSavedDraft()) requestStoragePersistence();
 document.querySelector('#brandHome').addEventListener('click', (event) => { event.preventDefault(); openLaunchScreen(); });
 document.querySelector('#continueButton').addEventListener('click', closeLaunchScreen);
 document.querySelector('#newCvButton').addEventListener('click', () => {
