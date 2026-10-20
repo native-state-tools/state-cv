@@ -28,6 +28,9 @@ const defaultData = {
 };
 
 let storageLoadFailed = false;
+let loadedRevision = 0;
+let storageConflict = false;
+let conflictingRevision = null;
 let resumeData = loadData();
 let saveTimer;
 
@@ -139,7 +142,13 @@ function toStorable() {
 function loadData() {
   try {
     const raw = stateStorage.getItem(STORAGE_KEY);
-    return raw === null ? structuredClone(defaultData) : normalizeData(JSON.parse(raw), { strict: true });
+    if (raw === null) {
+      loadedRevision = 0;
+      return structuredClone(defaultData);
+    }
+    const parsed = JSON.parse(raw);
+    loadedRevision = stateStorage.getDataRevision(STORAGE_KEY);
+    return normalizeData(parsed, { strict: true });
   } catch (error) {
     storageLoadFailed = true;
     console.error('State CV could not load saved data.', error);
@@ -147,16 +156,28 @@ function loadData() {
   }
 }
 
-function saveData() {
+function saveData({ force = false } = {}) {
   if (storageLoadFailed) {
     setStatus('error', 'Saved data not replaced');
     return false;
   }
+  if (storageConflict && !force) {
+    setStatus('error', 'Changes need your attention');
+    return false;
+  }
   try {
-    stateStorage.setItem(STORAGE_KEY, JSON.stringify(toStorable()));
+    loadedRevision = stateStorage.writeData(STORAGE_KEY, toStorable(), loadedRevision, force);
+    storageConflict = false;
+    conflictingRevision = null;
+    hideStorageNotice();
     setStatus('saved', 'Saved locally');
     return true;
   } catch (error) {
+    if (error.code === 'conflict') {
+      showStorageConflict(error.actualRevision);
+      setStatus('error', 'Changes need your attention');
+      return false;
+    }
     setStatus('error', 'Local save unavailable');
     console.error('State CV could not save locally.', error);
     return false;
@@ -173,6 +194,70 @@ function flushScheduledSave() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   saveData();
 }
+
+function showStorageConflict(revision) {
+  storageConflict = true;
+  conflictingRevision = revision;
+  const notice = document.querySelector('#storageNotice');
+  notice.querySelector('#storageNoticeMessage').textContent =
+    'This CV was saved in another tab. Reload the latest version, or keep your changes and replace it.';
+  notice.querySelector('#reloadLatestButton').hidden = false;
+  notice.querySelector('#keepMineButton').hidden = false;
+  notice.hidden = false;
+  notice.inert = false;
+}
+
+function hideStorageNotice() {
+  const notice = document.querySelector('#storageNotice');
+  if (notice.contains(document.activeElement)) document.querySelector('#brandHome').focus();
+  notice.inert = true;
+  notice.hidden = true;
+}
+
+function reloadLatestData() {
+  try {
+    const raw = stateStorage.getItem(STORAGE_KEY);
+    if (raw === null) {
+      resumeData = structuredClone(defaultData);
+      loadedRevision = 0;
+    } else {
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeData(parsed, { strict: true });
+      loadedRevision = stateStorage.getDataRevision(STORAGE_KEY);
+      resumeData = normalized;
+    }
+    storageConflict = false;
+    conflictingRevision = null;
+    renderFields(); updatePreview(); updateCompletion(); updateLaunchScreen();
+    hideStorageNotice();
+    setStatus('saved', 'Latest version loaded');
+  } catch (error) {
+    setStatus('error', 'Latest version could not be loaded');
+    console.error('State CV could not reload the latest saved data.', error);
+  }
+}
+
+function keepMine() {
+  if (!storageConflict) return;
+  try {
+    const currentRevision = stateStorage.getDataRevision(STORAGE_KEY);
+    loadedRevision = currentRevision;
+    saveData({ force: true });
+  } catch (error) {
+    setStatus('error', 'Latest version could not be checked');
+    console.error('State CV could not check the latest saved data.', error);
+  }
+}
+
+window.addEventListener('storage', (event) => {
+  if (event.key !== STORAGE_KEY) return;
+  try {
+    const revision = event.newValue === null ? 0 : stateStorage.getDataRevision(STORAGE_KEY);
+    if (revision !== loadedRevision) showStorageConflict(revision);
+  } catch (error) {
+    showStorageConflict(null);
+  }
+});
 
 window.addEventListener('beforeunload', flushScheduledSave);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushScheduledSave(); });
@@ -707,6 +792,8 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
   event.target.value = '';
 });
 document.querySelector('#resumeForm').addEventListener('submit', (event) => event.preventDefault());
+document.querySelector('#reloadLatestButton').addEventListener('click', reloadLatestData);
+document.querySelector('#keepMineButton').addEventListener('click', keepMine);
 
 renderFields();
 updatePreview();
