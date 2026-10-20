@@ -263,6 +263,13 @@ function updateLaunchScreen() {
   document.querySelector('#continueMeta').textContent = hasDraft ? 'Saved locally' : 'No saved draft yet';
 }
 
+function startNewCv() {
+  resumeData = structuredClone(defaultData);
+  storageLoadFailed = false;
+  document.querySelector('#exportFilename').removeAttribute('data-edited');
+  renderFields(); updatePreview(); updateCompletion(); saveData(); closeLaunchScreen();
+}
+
 async function extractPdfText(file) {
   if (!window.pdfjsLib) throw new Error('PDF reader is unavailable. The local vendor files may be missing.');
   const buffer = await file.arrayBuffer();
@@ -550,6 +557,29 @@ document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
   button.addEventListener('click', () => setMobileView(button.dataset.mobileViewButton));
 });
 document.querySelector('#mobileExportButton').addEventListener('click', () => document.querySelector('#printButton').click());
+document.querySelector('#desktopPreviewButton').addEventListener('click', () => {
+  if (window.matchMedia('(max-width: 1023px)').matches) setMobileView('preview');
+  else document.querySelector('#resumePreview').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+const moreMenu = document.querySelector('.more-menu');
+const moreMenuButton = moreMenu.querySelector('summary');
+function closeMoreMenu({ returnFocus = false } = {}) {
+  if (!moreMenu.open) return;
+  moreMenu.open = false;
+  if (returnFocus) moreMenuButton.focus();
+}
+moreMenu.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeMoreMenu({ returnFocus: true });
+  }
+});
+moreMenu.querySelectorAll('button, select, input').forEach((control) => {
+  control.addEventListener('change', () => closeMoreMenu());
+  control.addEventListener('click', () => {
+    if (control.tagName === 'BUTTON') closeMoreMenu({ returnFocus: true });
+  });
+});
 function updatePrintPageSize(size = document.querySelector('#paperSize').value) {
   const normalizedSize = size === 'a4' ? 'a4' : 'letter';
   document.documentElement.classList.toggle('page-a4', normalizedSize === 'a4');
@@ -653,11 +683,9 @@ if (storageLoadFailed) setImportStatus('Saved data could not be loaded', true);
 document.querySelector('#brandHome').addEventListener('click', (event) => { event.preventDefault(); openLaunchScreen(); });
 document.querySelector('#continueButton').addEventListener('click', closeLaunchScreen);
 document.querySelector('#newCvButton').addEventListener('click', () => {
-  resumeData = structuredClone(defaultData);
-  storageLoadFailed = false;
-  document.querySelector('#exportFilename').removeAttribute('data-edited');
-  renderFields(); updatePreview(); updateCompletion(); saveData(); closeLaunchScreen();
+  startNewCv();
 });
+document.querySelector('#startNewCvButton').addEventListener('click', startNewCv);
 document.querySelector('#launchImportButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 
 if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {

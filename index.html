@@ -43,10 +43,17 @@
       <div class="topbar-actions">
         <span class="save-status" id="saveStatus" aria-live="polite"><span class="status-dot"></span>Saved locally</span>
         <button class="button button-ghost" id="importButton" type="button"><span aria-hidden="true">↥</span> Import</button>
-        <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup</button>
-        <label class="paper-size-control" title="Choose your PDF page size"><span>PDF</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
-        <label class="filename-control" title="Choose the exported file name"><span>File</span><input id="exportFilename" type="text" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
+        <button class="button button-dark preview-action" id="desktopPreviewButton" type="button">Preview</button>
         <button class="button button-accent" id="printButton" type="button" title="Export a selectable-text PDF"><span aria-hidden="true">↗</span> Export PDF</button>
+        <details class="more-menu">
+          <summary class="button button-ghost" aria-controls="moreMenuContent">More</summary>
+          <div class="more-menu-content" id="moreMenuContent">
+            <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup (JSON)</button>
+            <label class="paper-size-control" title="Choose your PDF page size"><span>PDF page size</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
+            <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
+            <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
+          </div>
+        </details>
         <input id="importInput" type="file" accept="application/json,.json,application/pdf,.pdf" hidden />
         <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden />
       </div>
