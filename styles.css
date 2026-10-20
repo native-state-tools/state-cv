@@ -68,10 +68,10 @@ button { cursor: pointer; }
 .button-accent { background: var(--accent); border-color: var(--accent); color: #161226; }
 .paper-size-control, .filename-control { align-items: center; background: rgba(255, 255, 255, .03); border: 1px solid #3a3359; border-radius: 7px; color: #8f88aa; display: flex; font-family: Consolas, 'Courier New', monospace; font-size: 12px; gap: 5px; min-height: 32px; text-transform: uppercase; }
 .paper-size-control { padding-left: 9px; }
-.paper-size-control select { background: transparent; border: 0; color: #e7e2fa; cursor: pointer; font: inherit; min-height: 30px; outline: 0; padding: 5px 8px 5px 0; text-transform: uppercase; }
+.paper-size-control select { background: transparent; border: 0; color: #e7e2fa; cursor: pointer; font: inherit; font-size: 16px; min-height: 30px; outline: 0; padding: 5px 8px 5px 0; text-transform: uppercase; }
 .paper-size-control option { background: #211a3a; color: var(--ink); }
 .filename-control { padding: 0 8px; }
-.filename-control input { background: transparent; border: 0; box-shadow: none; color: #e7e2fa; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 12px; min-height: 30px; min-width: 88px; outline: 0; padding: 4px 0; width: 112px; }
+.filename-control input { background: transparent; border: 0; box-shadow: none; color: #e7e2fa; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 16px; min-height: 30px; min-width: 88px; outline: 0; padding: 4px 0; width: 112px; }
 .filename-control input:focus { box-shadow: none; }
 .filename-control b { color: #766e93; font-size: 9px; font-weight: 400; }
 .workspace { display: grid; grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr); min-height: calc(100vh - 65px); }
