@@ -1,9 +1,13 @@
-const CACHE_NAME = 'state-cv-cache-v2';
+const CACHE_NAME = 'state-cv-cache-v3';
 const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',
   './styles.css',
   './app.js',
+  './manifest.json',
+  './icons/icon.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
   './vendor/pdf.min.js',
   './vendor/jspdf.umd.min.js',
   './vendor/pdf.worker.min.js'
@@ -24,18 +28,20 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
   const isPrecachedAsset = PRECACHE_URLS.some((path) => new URL(path, self.location).pathname === url.pathname);
 
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', copy));
-      return response;
+      if (!response.ok || response.type !== 'basic' || response.redirected) return response;
+      return caches.open(CACHE_NAME)
+        .then((cache) => cache.put('./index.html', response.clone()))
+        .then(() => response, () => response);
     }).catch(() => caches.match('./index.html')));
     return;
   }
 
-  if (isPrecachedAsset || url.pathname.includes('/vendor/')) {
+  if (isPrecachedAsset) {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
   }
 });
