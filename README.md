@@ -16,8 +16,8 @@ Then open `127.0.0.1:3000`. The server uses only Node's built-in modules and doe
 
 - Live ATS-friendly CV preview
 - Local autosave with `localStorage`
-- JSON import and export for backup (imports up to 25 MB)
-- PDF import with local selectable-text extraction
+- JSON import and export for backup (imports up to 2 MB); backups are versioned and validated before use
+- PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
 - Native selectable-text PDF export in Letter or A4 format
 - Responsive editor and preview
 - No account or external service required
