@@ -558,8 +558,12 @@ document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
 });
 document.querySelector('#mobileExportButton').addEventListener('click', () => document.querySelector('#printButton').click());
 document.querySelector('#desktopPreviewButton').addEventListener('click', () => {
-  if (window.matchMedia('(max-width: 1023px)').matches) setMobileView('preview');
-  else document.querySelector('#resumePreview').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const button = document.querySelector('#desktopPreviewButton');
+  const isHidden = document.querySelector('#appShell').dataset.previewHidden !== 'true';
+  document.querySelector('#appShell').dataset.previewHidden = String(isHidden);
+  button.setAttribute('aria-expanded', String(!isHidden));
+  button.textContent = isHidden ? 'Show preview' : 'Hide preview';
+  document.querySelector('#previewPanel').setAttribute('aria-hidden', String(isHidden));
 });
 const moreMenu = document.querySelector('.more-menu');
 const moreMenuButton = moreMenu.querySelector('summary');

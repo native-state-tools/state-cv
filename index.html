@@ -43,7 +43,7 @@
       <div class="topbar-actions">
         <span class="save-status" id="saveStatus" aria-live="polite"><span class="status-dot"></span>Saved locally</span>
         <button class="button button-ghost" id="importButton" type="button"><span aria-hidden="true">↥</span> Import</button>
-        <button class="button button-dark preview-action" id="desktopPreviewButton" type="button">Preview</button>
+        <button class="button button-dark preview-action" id="desktopPreviewButton" type="button" aria-controls="previewPanel" aria-expanded="true">Hide preview</button>
         <button class="button button-accent" id="printButton" type="button" title="Export a selectable-text PDF"><span aria-hidden="true">↗</span> Export PDF</button>
         <details class="more-menu">
           <summary class="button button-ghost" aria-controls="moreMenuContent">More</summary>
@@ -109,7 +109,7 @@
         </form>
       </section>
 
-      <aside class="preview-panel" aria-label="CV preview">
+      <aside class="preview-panel" id="previewPanel" aria-label="CV preview">
         <div class="preview-toolbar"><div><span class="live-dot"></span><span>Live preview</span></div><span class="format-label" id="formatLabel">Letter / selectable text</span></div>
         <div class="paper-wrap"><article class="resume-paper" id="resumePreview"></article></div>
       </aside>

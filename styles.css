@@ -75,6 +75,8 @@ button { cursor: pointer; }
 .filename-control input:focus { box-shadow: none; }
 .filename-control b { color: #766e93; font-size: 9px; font-weight: 400; }
 .workspace { display: grid; grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr); min-height: calc(100vh - 65px); }
+.app-shell[data-preview-hidden="true"] .workspace { grid-template-columns: minmax(0, 1fr); }
+.app-shell[data-preview-hidden="true"] .preview-panel { display: none; }
 .editor-panel { background: linear-gradient(180deg, rgba(31, 24, 57, .78), var(--paper) 40%); padding: 58px clamp(30px, 5vw, 86px) 100px; }
 .panel-heading { align-items: flex-end; display: flex; justify-content: space-between; margin-bottom: 38px; }
 .eyebrow { color: var(--coral); font-family: Consolas, 'Courier New', monospace; font-size: 10px; letter-spacing: .08em; margin: 0 0 18px; text-transform: uppercase; }
@@ -180,6 +182,7 @@ html.page-letter { page: letter; }
   .quick-actions { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 1023px) {
+  .preview-action { display: none; }
   .topbar { padding: 12px 4vw; }
   .topbar-actions { flex: 1 1 70%; }
   .workspace { display: block; min-height: calc(100vh - 65px); }
