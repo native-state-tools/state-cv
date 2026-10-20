@@ -244,16 +244,20 @@ function setImportStatus(message, isError = false) { setStatus(isError ? 'error'
 
 function closeLaunchScreen() {
   const launchScreen = document.querySelector('#launchScreen');
+  const appShell = document.querySelector('#appShell');
+  appShell.inert = false;
+  document.querySelector('#brandHome').focus();
+  launchScreen.inert = true;
   launchScreen.classList.add('is-hidden');
-  launchScreen.setAttribute('aria-hidden', 'true');
-  document.querySelector('#appShell').inert = false;
 }
 function openLaunchScreen() {
   updateLaunchScreen();
   const launchScreen = document.querySelector('#launchScreen');
+  const appShell = document.querySelector('#appShell');
+  launchScreen.inert = false;
   launchScreen.classList.remove('is-hidden');
-  launchScreen.setAttribute('aria-hidden', 'false');
-  document.querySelector('#appShell').inert = true;
+  document.querySelector('#continueButton').focus();
+  appShell.inert = true;
 }
 
 function updateLaunchScreen() {
