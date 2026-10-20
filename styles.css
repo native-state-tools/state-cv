@@ -62,6 +62,7 @@ button { cursor: pointer; }
 .save-status.saving .status-dot { background: #e5a52e; box-shadow: 0 0 8px rgba(229, 165, 46, .55); }
 .save-status.error .status-dot { background: var(--coral); box-shadow: 0 0 8px rgba(255, 140, 218, .55); }
 .storage-notice { align-items: center; background: #32233d; border-bottom: 1px solid #795272; display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 4vw; position: sticky; top: 0; width: 100%; z-index: 40; }
+.storage-notice:not([hidden]) ~ .app-shell .topbar { top: 180px; }
 .storage-notice p { flex: 1 1 260px; line-height: 1.5; margin: 0; min-width: 0; }
 .storage-notice[hidden] { display: none; }
 .button { border: 1px solid #3a3359; border-radius: 7px; font-size: 12px; font-weight: 800; letter-spacing: .02em; min-height: 32px; padding: 6px 11px; transition: transform .18s, background .18s; }
@@ -280,6 +281,9 @@ html.page-letter { page: letter; }
   .data-summary > div { display: grid; gap: 8px; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr); }
   .data-summary dt { margin: 0; }
   .data-dialog-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 651px) {
+  .storage-notice:not([hidden]) ~ .app-shell .topbar { top: 80px; }
 }
 @media (pointer: coarse) {
   button, select, input, textarea { min-height: 44px; }
