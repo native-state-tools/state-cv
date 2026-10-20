@@ -31,8 +31,20 @@ let storageLoadFailed = false;
 let loadedRevision = 0;
 let storageConflict = false;
 let conflictingRevision = null;
+let lastSnapshotAt = Date.now();
 let resumeData = loadData();
 let saveTimer;
+
+try {
+  const snapshots = stateStorage.readSnapshots();
+  const lastSnapshot = snapshots.at(-1);
+  if (lastSnapshot?.savedAt) {
+    const timestamp = Date.parse(lastSnapshot.savedAt);
+    if (Number.isFinite(timestamp)) lastSnapshotAt = timestamp;
+  }
+} catch (error) {
+  console.error('State CV could not read saved snapshots.', error);
+}
 
 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
 
@@ -166,6 +178,7 @@ function saveData({ force = false } = {}) {
     return false;
   }
   try {
+    if (Date.now() - lastSnapshotAt >= 10 * 60 * 1000) snapshotLatestStored();
     loadedRevision = stateStorage.writeData(STORAGE_KEY, toStorable(), loadedRevision, force);
     storageConflict = false;
     conflictingRevision = null;
@@ -173,6 +186,11 @@ function saveData({ force = false } = {}) {
     setStatus('saved', 'Saved locally');
     return true;
   } catch (error) {
+    if (error.code === 'snapshot') {
+      setStatus('error', 'Snapshot failed; local save paused');
+      console.error('State CV could not create a protective snapshot.', error.cause);
+      return false;
+    }
     if (error.code === 'conflict') {
       showStorageConflict(error.actualRevision);
       setStatus('error', 'Changes need your attention');
@@ -182,6 +200,37 @@ function saveData({ force = false } = {}) {
     console.error('State CV could not save locally.', error);
     return false;
   }
+}
+
+function takeSnapshot(data = toStorable(), revision = loadedRevision) {
+  let snapshots;
+  try {
+    snapshots = stateStorage.addSnapshot({
+      savedAt: new Date().toISOString(),
+      revision,
+      data: structuredClone(data)
+    });
+  } catch (error) {
+    const snapshotError = new Error('Could not save a protective snapshot.');
+    snapshotError.code = 'snapshot';
+    snapshotError.cause = error;
+    throw snapshotError;
+  }
+  const savedAt = Date.parse(snapshots.at(-1).savedAt);
+  lastSnapshotAt = Number.isFinite(savedAt) ? savedAt : Date.now();
+}
+
+function snapshotLatestStored() {
+  const raw = stateStorage.getItem(STORAGE_KEY);
+  if (raw === null) {
+    takeSnapshot();
+    return true;
+  }
+  const parsed = JSON.parse(raw);
+  const revision = stateStorage.getDataRevision(STORAGE_KEY);
+  const data = normalizeData(parsed, { strict: true });
+  takeSnapshot({ schemaVersion: SCHEMA_VERSION, ...data }, revision);
+  return true;
 }
 
 function scheduleSave() {
@@ -232,6 +281,11 @@ function reloadLatestData() {
     hideStorageNotice();
     setStatus('saved', 'Latest version loaded');
   } catch (error) {
+    if (error.code === 'snapshot') {
+      setStatus('error', 'Snapshot failed; local save paused');
+      console.error('State CV could not create a protective snapshot.', error.cause);
+      return false;
+    }
     setStatus('error', 'Latest version could not be loaded');
     console.error('State CV could not reload the latest saved data.', error);
   }
@@ -241,11 +295,12 @@ function keepMine() {
   if (!storageConflict) return;
   try {
     const currentRevision = stateStorage.getDataRevision(STORAGE_KEY);
+    if (currentRevision !== loadedRevision) snapshotLatestStored();
     loadedRevision = currentRevision;
     saveData({ force: true });
   } catch (error) {
     setStatus('error', 'Latest version could not be checked');
-    console.error('State CV could not check the latest saved data.', error);
+    console.error('State CV could not preserve the latest saved data.', error);
   }
 }
 
@@ -364,6 +419,13 @@ function updateLaunchScreen() {
 
 function startNewCv({ confirmReplacement = true } = {}) {
   if (confirmReplacement && !window.confirm('Starting a new CV will replace the current CV. Continue?')) return;
+  try {
+    takeSnapshot();
+  } catch (error) {
+    setStatus('error', 'Could not protect the current CV');
+    console.error('State CV could not create a snapshot before starting a new CV.', error);
+    return;
+  }
   resumeData = structuredClone(defaultData);
   storageLoadFailed = false;
   document.querySelector('#exportFilename').removeAttribute('data-edited');
@@ -718,6 +780,7 @@ async function handlePdfImport(file) {
   try {
     const lines = await extractPdfText(file);
     if (!lines.length) throw new ImportError('This PDF has no selectable text. Try an OCR-enabled PDF.');
+    takeSnapshot();
     const imported = importPdfLines(lines);
     setImportStatus(`PDF imported · ${imported.experience + imported.education} entries`);
     closeLaunchScreen();
@@ -725,6 +788,9 @@ async function handlePdfImport(file) {
     if (error instanceof ImportError) {
       setImportStatus(error.message, true);
       alert(error.message);
+    } else if (error.code === 'snapshot') {
+      setImportStatus('Could not protect the current CV; PDF import stopped', true);
+      console.error('State CV could not snapshot before importing a PDF.', error.cause);
     } else {
       console.error('State CV could not read the PDF.', error);
       const message = 'That PDF could not be read. It may be damaged or password protected.';
@@ -772,6 +838,7 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
     }
     try {
       const normalized = normalizeData(imported, { strict: true });
+      takeSnapshot();
       resumeData = normalized;
       document.querySelector('#exportFilename').removeAttribute('data-edited');
       renderFields(); updatePreview(); updateCompletion(); storageLoadFailed = false; saveData();
@@ -781,6 +848,9 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
         const message = `That backup could not be imported. ${error.message}`;
         setImportStatus(message, true);
         alert(message);
+      } else if (error.code === 'snapshot') {
+        setImportStatus('Could not protect the current CV; backup import stopped', true);
+        console.error('State CV could not snapshot before importing a backup.', error.cause);
       } else {
         const message = 'That file could not be read as a State CV JSON export.';
         console.error('State CV could not import the JSON backup.', error);

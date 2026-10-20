@@ -39,6 +39,55 @@
       return parsed.revision;
     }
 
+    function readSnapshots(target) {
+      const raw = target.getItem('state-cv-snapshots-v1');
+      if (raw === null) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error('Saved snapshots are not a valid list.');
+      return parsed;
+    }
+
+    function writeSnapshotList(target, snapshots) {
+      const list = snapshots.slice(-5);
+      while (true) {
+        try {
+          target.setItem('state-cv-snapshots-v1', JSON.stringify(list));
+          return list;
+        } catch (error) {
+          if (list.length <= 1) throw error;
+          list.shift();
+        }
+      }
+    }
+
+    function writeDataWithEviction(target, key, value) {
+      try {
+        target.setItem(key, value);
+      } catch (initialError) {
+        let snapshots;
+        try {
+          snapshots = readSnapshots(target);
+        } catch (error) {
+          throw initialError;
+        }
+        while (snapshots.length) {
+          snapshots.shift();
+          try {
+            target.setItem('state-cv-snapshots-v1', JSON.stringify(snapshots));
+          } catch (error) {
+            continue;
+          }
+          try {
+            target.setItem(key, value);
+            return;
+          } catch (error) {
+            initialError = error;
+          }
+        }
+        throw initialError;
+      }
+    }
+
     return {
       getItem(key) {
         return requireStorage().getItem(key);
@@ -62,8 +111,17 @@
           throw conflictError;
         }
         const revision = currentRevision + 1;
-        target.setItem(key, JSON.stringify({ ...data, revision }));
+        writeDataWithEviction(target, key, JSON.stringify({ ...data, revision }));
         return revision;
+      },
+      readSnapshots() {
+        return readSnapshots(requireStorage());
+      },
+      addSnapshot(snapshot) {
+        const target = requireStorage();
+        const snapshots = readSnapshots(target);
+        snapshots.push(snapshot);
+        return writeSnapshotList(target, snapshots);
       }
     };
   }
