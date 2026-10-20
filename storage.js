@@ -42,9 +42,14 @@
     function readSnapshots(target) {
       const raw = target.getItem('state-cv-snapshots-v1');
       if (raw === null) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) throw new Error('Saved snapshots are not a valid list.');
-      return parsed;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (error) {
+        console.error('State CV found an unreadable snapshot list and is replacing it.', error);
+      }
+      target.setItem('state-cv-snapshots-v1', '[]');
+      return [];
     }
 
     function writeSnapshotList(target, snapshots) {
