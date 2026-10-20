@@ -9,7 +9,12 @@ const PDF_PARSE_TIMEOUT_MS = 30000;
 const MAX_PDF_PAGES = 20;
 const MAX_PDF_TEXT_CHARS = 200000;
 
-class ImportError extends Error {}
+class ImportError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ImportError';
+  }
+}
 
 const defaultData = {
   basics: { name: '', title: '', location: '', email: '', phone: '', website: '' },
@@ -295,7 +300,7 @@ async function extractPdfText(file) {
     return pages.flat().filter((line) => line && !appChrome.test(line) && !/^localhost:\d+\s+\d+\/\d+$/i.test(line));
   };
   try {
-    const timeout = new Promise((resolve, reject) => {
+    const timeout = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
         loadingTask.destroy().catch(() => {});
         reject(new ImportError(`PDF reading timed out after ${PDF_PARSE_TIMEOUT_MS / 1000} seconds.`));
