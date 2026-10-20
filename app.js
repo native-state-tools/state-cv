@@ -8,6 +8,7 @@ const MAX_EDUCATION_ENTRIES = 20;
 const PDF_PARSE_TIMEOUT_MS = 30000;
 const MAX_PDF_PAGES = 20;
 const MAX_PDF_TEXT_CHARS = 200000;
+const isIosDevice = () => /iPad|iPhone|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 class ImportError extends Error {
   constructor(message) {
@@ -486,6 +487,7 @@ document.querySelector('#addEducation').addEventListener('click', () => {
 function exportPdf() {
   if (!window.jspdf?.jsPDF) {
     window.print();
+    if (isIosDevice()) setImportStatus('If PDF opens, tap Share > Save to Files');
     return;
   }
   const { jsPDF } = window.jspdf;
@@ -547,7 +549,7 @@ function exportPdf() {
   if (skills) { sectionHeading('Skills'); writeLines(skills, 9, { leading: 12 }); }
   const filename = `${safeFilename(document.querySelector('#exportFilename').value || basics.name || 'CV')}.pdf`;
   doc.save(filename);
-  setImportStatus('PDF downloaded');
+  setImportStatus(isIosDevice() ? 'If PDF opens, tap Share > Save to Files' : 'PDF downloaded');
 }
 document.querySelector('#printButton').addEventListener('click', exportPdf);
 function setMobileView(view) {
