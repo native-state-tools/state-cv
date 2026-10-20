@@ -526,11 +526,6 @@ function renderYourDataDialog() {
 }
 
 function restoreSnapshot(index, normalizedData) {
-  if (storageLoadFailed) {
-    document.querySelector('#dataDialogStatus').textContent =
-      'Import a JSON backup or explicitly start a new CV before replacing damaged or unreadable saved data.';
-    return;
-  }
   if (storageConflict) {
     document.querySelector('#dataDialogStatus').textContent = 'Resolve the other-tab change before restoring a snapshot.';
     return;
@@ -549,7 +544,7 @@ function restoreSnapshot(index, normalizedData) {
     resumeData = structuredClone(normalizedData);
     document.querySelector('#exportFilename').removeAttribute('data-edited');
     renderFields(); updatePreview(); updateCompletion();
-    const saved = saveData();
+    const saved = saveData({ force: storageLoadFailed || storageDamaged });
     renderYourDataDialog();
     document.querySelector('#dataDialogStatus').textContent = saved
       ? 'Snapshot restored and saved.'
