@@ -61,7 +61,7 @@ button { cursor: pointer; }
 .status-dot, .live-dot { background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px rgba(185, 255, 102, .55); display: inline-block; height: 7px; margin-right: 6px; width: 7px; }
 .save-status.saving .status-dot { background: #e5a52e; box-shadow: 0 0 8px rgba(229, 165, 46, .55); }
 .save-status.error .status-dot { background: var(--coral); box-shadow: 0 0 8px rgba(255, 140, 218, .55); }
-.storage-notice { align-items: center; background: #32233d; border-bottom: 1px solid #795272; display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 4vw; width: 100%; }
+.storage-notice { align-items: center; background: #32233d; border-bottom: 1px solid #795272; display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 4vw; position: sticky; top: 0; width: 100%; z-index: 40; }
 .storage-notice p { flex: 1 1 260px; line-height: 1.5; margin: 0; min-width: 0; }
 .storage-notice[hidden] { display: none; }
 .button { border: 1px solid #3a3359; border-radius: 7px; font-size: 12px; font-weight: 800; letter-spacing: .02em; min-height: 32px; padding: 6px 11px; transition: transform .18s, background .18s; }
