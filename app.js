@@ -4,6 +4,8 @@ const APP_NAME = 'State CV';
 const SCHEMA_VERSION = 1;
 const MAX_PDF_IMPORT_BYTES = 10 * 1024 * 1024;
 const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_EXPERIENCE_ENTRIES = 30;
+const MAX_EDUCATION_ENTRIES = 20;
 const PDF_PARSE_TIMEOUT_MS = 30000;
 const MAX_PDF_PAGES = 20;
 const MAX_PDF_TEXT_CHARS = 200000;
@@ -90,10 +92,10 @@ function normalizeData(data, { strict = false } = {}) {
     });
   };
   const basicsData = normalizeObject(data.basics, 'basics');
-  const experience = normalizeRecords(data.experience, 'experience', 30, [
+  const experience = normalizeRecords(data.experience, 'experience', MAX_EXPERIENCE_ENTRIES, [
     ['role', 200], ['company', 200], ['dates', 100], ['highlights', 10000]
   ]);
-  const education = normalizeRecords(data.education, 'education', 20, [
+  const education = normalizeRecords(data.education, 'education', MAX_EDUCATION_ENTRIES, [
     ['degree', 200], ['school', 200], ['dates', 100]
   ]);
   return {
@@ -455,8 +457,14 @@ function importPdfLines(lines) {
 }
 
 document.querySelectorAll('[data-path]').forEach((field) => field.addEventListener('input', () => { setValue(field.dataset.path, field.value); if (field.dataset.path === 'summary') updateSummaryCount(); updatePreview(); updateCompletion(); scheduleSave(); }));
-document.querySelector('#addExperience').addEventListener('click', () => { resumeData.experience.push({ role: '', company: '', dates: '', highlights: '' }); renderRepeaters(); updateCompletion(); scheduleSave(); });
-document.querySelector('#addEducation').addEventListener('click', () => { resumeData.education.push({ degree: '', school: '', dates: '' }); renderRepeaters(); updateCompletion(); scheduleSave(); });
+document.querySelector('#addExperience').addEventListener('click', () => {
+  if (resumeData.experience.length >= MAX_EXPERIENCE_ENTRIES) { setImportStatus(`Limit of ${MAX_EXPERIENCE_ENTRIES} entries reached`, true); return; }
+  resumeData.experience.push({ role: '', company: '', dates: '', highlights: '' }); renderRepeaters(); updateCompletion(); scheduleSave();
+});
+document.querySelector('#addEducation').addEventListener('click', () => {
+  if (resumeData.education.length >= MAX_EDUCATION_ENTRIES) { setImportStatus(`Limit of ${MAX_EDUCATION_ENTRIES} entries reached`, true); return; }
+  resumeData.education.push({ degree: '', school: '', dates: '' }); renderRepeaters(); updateCompletion(); scheduleSave();
+});
 function exportPdf() {
   if (!window.jspdf?.jsPDF) {
     window.print();
