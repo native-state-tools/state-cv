@@ -1,5 +1,4 @@
-// TODO: Remove the one-time migration bridge in the next release.
-const CACHE_NAME = 'state-cv-cache-v13';
+const CACHE_NAME = 'state-cv-cache-v14';
 const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',
@@ -25,10 +24,7 @@ self.addEventListener('install', (event) => {
       }
       await cache.put(request, response);
     })
-  )).then(() => caches.keys()).then((keys) => {
-    // ONE-TIME MIGRATION BRIDGE for users coming from v12, which had no update prompt. REMOVE in the next release; after that, updates apply only via the SKIP_WAITING message.
-    if (keys.includes('state-cv-cache-v12')) return self.skipWaiting();
-  }));
+  )));
 });
 
 self.addEventListener('activate', (event) => {

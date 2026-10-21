@@ -4,6 +4,13 @@
   "private": true,
   "description": "State CV — local-first ATS-compatible CV builder by Native State Tools",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "lint": "node scripts/lint-csp.js",
+    "lint:selftest": "node scripts/lint-csp.js --self-test",
+    "test:unit": "node --test",
+    "test:e2e": "npx playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }

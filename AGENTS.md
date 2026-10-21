@@ -28,3 +28,11 @@
 - Run `npm start` for the local smoke test and open `127.0.0.1:3000`; direct opening of `index.html` should remain supported.
 - Verify changes with networking disabled when practical. Check local autosave, JSON backup/restore, PDF import, PDF export, and responsive behavior when those paths are touched.
 - Confirm there are no new external URLs, package downloads, console errors, CSP violations, or data transmissions.
+
+## Testing and CI
+
+- Run `npm run lint`, `npm run lint:selftest`, `npm run test:unit`, and `npm run test:e2e`.
+- Keep classic scripts (including `file://` support); preserve the CSP: no inline style attributes, `setAttribute('style')`, dynamic `innerHTML`/HTML insertion, module scripts, or external runtime requests.
+- Bump `CACHE_NAME` for any precached-file change. Do not edit `vendor/` or add dependencies without approval.
+- Do not push or merge. Put screenshots outside the repository (`C:\Users\brian\test-shots\`). The browser window is about 706x604 and cannot resize; use Playwright/JS measurements for viewport claims.
+- Approved Phase 4 dev files: `tests/unit/*.test.js`, `tests/e2e/*.spec.js`, `playwright.config.js`, `scripts/lint-csp.js`, `.github/workflows/ci.yml`; `@playwright/test` is dev-only.

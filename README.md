@@ -12,6 +12,17 @@ npm start
 
 Then open `127.0.0.1:3000`. The server uses only Node's built-in modules and does not install or download anything. The app also works by opening `index.html` directly in a browser.
 
+## Tests
+
+Run `npm install` and `npx playwright install chromium` once before testing; the app itself still needs no install.
+
+```bash
+npm run lint
+npm run lint:selftest
+npm run test:unit
+npm run test:e2e
+```
+
 ## Features
 
 - Live ATS-friendly CV preview

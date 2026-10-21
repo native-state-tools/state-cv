@@ -172,4 +172,5 @@
   }
 
   root.StateCVStorage = createStorage;
+  if (typeof module !== 'undefined' && module.exports) module.exports = createStorage;
 })(typeof globalThis === 'object' ? globalThis : this);
