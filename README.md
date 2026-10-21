@@ -35,6 +35,10 @@ PDF.js 3.11.174 and jsPDF 2.5.1 are vendored locally in `vendor/`, fonts use loc
 
 Drafts, snapshots, damaged-data copies, and the browser-persistence request result stay in local browser storage. After the first successful save, State CV requests persistent browser storage when the browser supports it; if the request is not granted, it retries on later page loads. The **Your data** dialog shows both the saved request result and the browser's current persistence status when available. Persistence is not a substitute for downloading a JSON backup. Storage behavior may differ when opening `index.html` directly from the file system compared with the hosted site.
 
+## How updates work
+
+The app shell is downloaded and cached as one version. When a newer version is found, it downloads in the background while the current version keeps running. State CV then shows an **Update now** notice; one tap applies the update and reloads the app. Nothing reloads automatically.
+
 ## License
 
 Released under the MIT License. The vendored PDF.js and jsPDF distributions retain their original license notices.
