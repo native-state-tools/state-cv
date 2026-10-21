@@ -29,10 +29,17 @@ const defaultData = {
 
 let storageLoadFailed = false;
 let storageDamaged = false;
+let storageWriteFailed = false;
 let damagedRaw = null;
 let damagedCopyStored = false;
 let loadedRevision = 0;
 let storageConflict = false;
+let serviceWorkerRegistration = null;
+let waitingServiceWorker = null;
+let updateNoticeDismissed = false;
+let updateRequested = false;
+let updateReloaded = false;
+let appVersionRequestId = 0;
 let persistenceResult = 'unknown';
 let persistenceRequestStarted = false;
 let lastSnapshotAt = Date.now();
@@ -46,7 +53,7 @@ try {
     persistenceRequestStarted = storedPersistenceResult === 'granted';
   }
 } catch (error) {
-  console.error('State CV could not read its local persistence status.', error);
+  console.warn('State CV could not read its local persistence status.', error);
 }
 
 try {
@@ -57,7 +64,7 @@ try {
     if (Number.isFinite(timestamp)) lastSnapshotAt = timestamp;
   }
 } catch (error) {
-  console.error('State CV could not read saved snapshots.', error);
+  console.warn('State CV could not read saved snapshots.', error);
 }
 
 if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
@@ -170,7 +177,7 @@ function loadData() {
     raw = stateStorage.getItem(STORAGE_KEY);
   } catch (error) {
     storageLoadFailed = true;
-    console.error('State CV could not read saved data.', error);
+    console.warn('State CV could not read saved data.', error);
     return structuredClone(defaultData);
   }
   if (raw === null) {
@@ -197,9 +204,9 @@ function preserveDamagedData(raw, cause) {
     damagedCopyStored = true;
   } catch (error) {
     damagedCopyStored = false;
-    console.error('State CV could not save a separate copy of damaged data.', error);
+    console.warn('State CV could not save a separate copy of damaged data.', error);
   }
-  console.error('State CV found damaged saved data and will not replace it automatically.', cause);
+  console.warn('State CV found damaged saved data and will not replace it automatically.', cause);
 }
 
 function saveData({ force = false } = {}) {
@@ -224,6 +231,7 @@ function saveData({ force = false } = {}) {
     loadedRevision = stateStorage.writeData(STORAGE_KEY, data, loadedRevision, force);
     storageLoadFailed = false;
     storageDamaged = false;
+    storageWriteFailed = false;
     storageConflict = false;
     if (replacingDamagedData) {
       showDamagedNotice('The original damaged data is preserved separately. Download it if you need the raw file.');
@@ -244,6 +252,8 @@ function saveData({ force = false } = {}) {
       setStatus('error', 'Changes need your attention');
       return false;
     }
+    storageWriteFailed = true;
+    showStorageUnavailableNotice('Browser storage could not be written. Changes are not being saved.');
     setStatus('error', 'Local save unavailable');
     console.error('State CV could not save locally.', error);
     return false;
@@ -347,10 +357,10 @@ function scheduleSave() {
 }
 
 function flushScheduledSave() {
-  if (!saveTimer) return;
+  if (!saveTimer) return true;
   clearTimeout(saveTimer);
   saveTimer = null;
-  saveData();
+  return saveData();
 }
 
 function cancelScheduledSave() {
@@ -370,6 +380,8 @@ function showStorageConflict(revision) {
   notice.querySelector('#dismissStorageNoticeButton').inert = true;
   notice.hidden = false;
   notice.inert = false;
+  updateUpdateButtonState();
+  updateStickyOffsets();
 }
 
 function showDamagedNotice(message) {
@@ -385,6 +397,26 @@ function showDamagedNotice(message) {
   notice.querySelector('#dismissStorageNoticeButton').inert = false;
   notice.hidden = false;
   notice.inert = false;
+  updateUpdateButtonState();
+  updateStickyOffsets();
+}
+
+function showStorageUnavailableNotice(message) {
+  const notice = document.querySelector('#storageNotice');
+  notice.querySelector('#storageNoticeMessage').textContent = message ||
+    'Browser storage could not be read. State CV will not overwrite saved data.';
+  notice.querySelector('#reloadLatestButton').hidden = true;
+  notice.querySelector('#reloadLatestButton').inert = true;
+  notice.querySelector('#keepMineButton').hidden = true;
+  notice.querySelector('#keepMineButton').inert = true;
+  notice.querySelector('#downloadDamagedButton').hidden = true;
+  notice.querySelector('#downloadDamagedButton').inert = true;
+  notice.querySelector('#dismissStorageNoticeButton').hidden = false;
+  notice.querySelector('#dismissStorageNoticeButton').inert = false;
+  notice.hidden = false;
+  notice.inert = false;
+  updateUpdateButtonState();
+  updateStickyOffsets();
 }
 
 function downloadDamagedData() {
@@ -437,6 +469,7 @@ function renderYourDataDialog() {
   const storedSize = document.querySelector('#dataStoredSize');
   const persistenceStatus = document.querySelector('#dataPersistenceStatus');
   const livePersistenceStatus = document.querySelector('#dataLivePersistenceStatus');
+  const appVersion = document.querySelector('#dataAppVersion');
   const snapshotsList = document.querySelector('#snapshotsList');
   const snapshotsEmpty = document.querySelector('#snapshotsEmpty');
   const damagedDownloadButton = document.querySelector('#downloadDamagedDialogButton');
@@ -484,6 +517,7 @@ function renderYourDataDialog() {
         : 'Not requested yet';
   livePersistenceStatus.textContent = 'Checking…';
   updateLivePersistenceStatus(livePersistenceStatus);
+  updateAppVersion(appVersion);
   damagedDownloadButton.hidden = !damaged;
   damagedDownloadButton.inert = !damaged;
   snapshotsList.replaceChildren();
@@ -596,6 +630,7 @@ function clearAllData() {
     loadedRevision = 0;
     storageLoadFailed = false;
     storageDamaged = false;
+    storageWriteFailed = false;
     storageConflict = false;
     damagedRaw = null;
     damagedCopyStored = false;
@@ -603,6 +638,7 @@ function clearAllData() {
     persistenceRequestStarted = false;
     renderFields(); updatePreview(); updateCompletion(); updateLaunchScreen();
     hideStorageNotice();
+    setStatus('saved', 'No saved draft');
     dialogStatus.textContent = 'All State CV data was cleared from this browser.';
     renderYourDataDialog();
     document.querySelector('#dataDialogStatus').textContent = 'All State CV data was cleared from this browser.';
@@ -620,6 +656,7 @@ function hideStorageNotice() {
   }
   notice.inert = true;
   notice.hidden = true;
+  updateStickyOffsets();
 }
 
 function reloadLatestData() {
@@ -631,6 +668,7 @@ function reloadLatestData() {
       loadedRevision = 0;
       storageLoadFailed = false;
       storageDamaged = false;
+      storageWriteFailed = false;
       damagedRaw = null;
       damagedCopyStored = false;
     } else {
@@ -642,6 +680,7 @@ function reloadLatestData() {
     }
     storageLoadFailed = false;
     storageDamaged = false;
+    storageWriteFailed = false;
     storageConflict = false;
     renderFields(); updatePreview(); updateCompletion(); updateLaunchScreen();
     if (damagedRaw) {
@@ -809,11 +848,19 @@ function updateCompletion() {
 }
 
 function setStatus(state, message) {
+  if (storageDamaged) {
+    state = 'error';
+    message = 'Not saving: damaged data';
+  } else if (storageLoadFailed || storageWriteFailed) {
+    state = 'error';
+    message = 'Not saving: storage unavailable';
+  }
   const status = document.querySelector('#saveStatus');
   status.className = `save-status ${state}`;
   const dot = document.createElement('span');
   dot.className = 'status-dot';
   status.replaceChildren(dot, document.createTextNode(message));
+  updateUpdateButtonState();
 }
 
 function setImportStatus(message, isError = false) { setStatus(isError ? 'error' : 'saved', message); }
@@ -841,7 +888,7 @@ function hasSavedDraft() {
     return Boolean(stateStorage.getItem(STORAGE_KEY));
   } catch (error) {
     storageLoadFailed = true;
-    console.error('State CV could not check for a saved draft.', error);
+    console.warn('State CV could not check for a saved draft.', error);
     return false;
   }
 }
@@ -850,7 +897,11 @@ function updateLaunchScreen() {
   const hasDraft = hasSavedDraft();
   const name = resumeData.basics.name.trim();
   document.querySelector('#continueLabel').textContent = hasDraft ? `Continue ${name || 'your CV'}` : 'Continue your CV';
-  document.querySelector('#continueMeta').textContent = hasDraft ? 'Saved locally' : 'No saved draft yet';
+  document.querySelector('#continueMeta').textContent = storageDamaged
+    ? 'Saved data needs attention'
+    : hasDraft
+      ? 'Saved locally'
+      : 'No saved draft yet';
 }
 
 function startNewCv({ confirmReplacement = true } = {}) {
@@ -1339,14 +1390,13 @@ updatePreview();
 updateCompletion();
 updatePrintPageSize();
 updateLaunchScreen();
-if (storageDamaged) showDamagedNotice();
+if (storageDamaged) {
+  showDamagedNotice();
+  setStatus('error', 'Not saving: damaged data');
+}
 else if (storageLoadFailed) {
+  showStorageUnavailableNotice();
   setImportStatus('Saved data could not be loaded; saving is blocked', true);
-  const notice = document.querySelector('#storageNotice');
-  notice.querySelector('#storageNoticeMessage').textContent =
-    'Browser storage could not be read. State CV will not overwrite saved data.';
-  notice.hidden = false;
-  notice.inert = false;
 }
 if (persistenceResult !== 'granted' && hasSavedDraft()) requestStoragePersistence();
 document.querySelector('#brandHome').addEventListener('click', (event) => { event.preventDefault(); openLaunchScreen(); });
@@ -1357,8 +1407,144 @@ document.querySelector('#newCvButton').addEventListener('click', () => {
 document.querySelector('#startNewCvButton').addEventListener('click', startNewCv);
 document.querySelector('#launchImportButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 
+function updateUpdateButtonState() {
+  const button = document.querySelector('#applyUpdateButton');
+  if (!button) return;
+  const blocked = storageConflict || storageLoadFailed || storageDamaged || storageWriteFailed;
+  button.disabled = blocked || !waitingServiceWorker;
+  button.inert = blocked || !waitingServiceWorker;
+}
+
+function showUpdateNotice(worker) {
+  if (!worker || updateNoticeDismissed) return;
+  waitingServiceWorker = worker;
+  const notice = document.querySelector('#updateNotice');
+  notice.hidden = false;
+  notice.inert = false;
+  updateUpdateButtonState();
+  updateStickyOffsets();
+}
+
+function observeInstallingWorker(registration, worker) {
+  if (!worker) return;
+  worker.addEventListener('statechange', () => {
+    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+      showUpdateNotice(registration.waiting || worker);
+    }
+  });
+}
+
+function refreshServiceWorker() {
+  if (!serviceWorkerRegistration) return;
+  serviceWorkerRegistration.update().catch((error) => {
+    console.error('State CV could not check for an app update.', error);
+  });
+}
+
+async function updateAppVersion(versionNode) {
+  const requestId = ++appVersionRequestId;
+  versionNode.textContent = 'Checking…';
+  if (!('serviceWorker' in navigator) || !/^https?:$/.test(window.location.protocol) ||
+      typeof MessageChannel !== 'function') {
+    versionNode.textContent = 'Not available';
+    return;
+  }
+
+  const startedAt = Date.now();
+  let channel;
+  try {
+    let worker = navigator.serviceWorker.controller || serviceWorkerRegistration?.active;
+    if (!worker) {
+      const registration = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((resolve) => setTimeout(() => resolve(null), 500))
+      ]);
+      worker = registration?.active || navigator.serviceWorker.controller;
+    }
+    const remaining = 1000 - (Date.now() - startedAt);
+    if (!worker || remaining <= 0) {
+      if (requestId === appVersionRequestId) versionNode.textContent = 'Not available';
+      return;
+    }
+
+    channel = new MessageChannel();
+    const version = await new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), remaining);
+      channel.port1.onmessage = (event) => {
+        clearTimeout(timeout);
+        resolve(event.data);
+      };
+      worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+    });
+    if (requestId === appVersionRequestId) {
+      versionNode.textContent = typeof version === 'string' && version.startsWith('state-cv-cache-')
+        ? version
+        : 'Not available';
+    }
+  } catch (error) {
+    if (requestId === appVersionRequestId) versionNode.textContent = 'Not available';
+    console.error('State CV could not read the app version from its service worker.', error);
+  } finally {
+    if (channel) channel.port1.close();
+  }
+}
+
+document.querySelector('#applyUpdateButton').addEventListener('click', () => {
+  if (!waitingServiceWorker || storageConflict || storageLoadFailed || storageDamaged || storageWriteFailed) return;
+  if (!flushScheduledSave()) return;
+  updateRequested = true;
+  document.querySelector('#applyUpdateButton').disabled = true;
+  try {
+    waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+  } catch (error) {
+    updateRequested = false;
+    updateUpdateButtonState();
+    console.error('State CV could not apply the waiting app update.', error);
+  }
+});
+document.querySelector('#laterUpdateButton').addEventListener('click', () => {
+  updateNoticeDismissed = true;
+  const notice = document.querySelector('#updateNotice');
+  notice.inert = true;
+  notice.hidden = true;
+  updateStickyOffsets();
+});
+
 if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
-  navigator.serviceWorker.register('./sw.js').catch((error) => {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((registration) => {
+    serviceWorkerRegistration = registration;
+    if (registration.waiting && navigator.serviceWorker.controller) showUpdateNotice(registration.waiting);
+    registration.addEventListener('updatefound', () => {
+      observeInstallingWorker(registration, registration.installing);
+    });
+    observeInstallingWorker(registration, registration.installing);
+  }).catch((error) => {
     console.error('State CV could not enable offline support.', error);
   });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!updateRequested || updateReloaded) return;
+    updateReloaded = true;
+    window.location.reload();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshServiceWorker();
+  });
+  window.addEventListener('online', refreshServiceWorker);
+}
+
+function updateStickyOffsets() {
+  const root = document.documentElement;
+  const noticeStack = document.querySelector('#noticeStack');
+  const topbar = document.querySelector('.topbar');
+  root.style.setProperty('--notice-height', `${noticeStack.getBoundingClientRect().height}px`);
+  root.style.setProperty('--topbar-height', `${topbar.getBoundingClientRect().height}px`);
+}
+
+updateStickyOffsets();
+if (typeof ResizeObserver === 'function') {
+  const stickyOffsetObserver = new ResizeObserver(updateStickyOffsets);
+  stickyOffsetObserver.observe(document.querySelector('#noticeStack'));
+  stickyOffsetObserver.observe(document.querySelector('.topbar'));
+} else {
+  window.addEventListener('resize', updateStickyOffsets);
 }

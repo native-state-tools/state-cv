@@ -15,13 +15,20 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <section class="storage-notice" id="storageNotice" role="status" aria-live="polite" hidden inert>
-    <p id="storageNoticeMessage"></p>
-    <button class="button button-dark" id="reloadLatestButton" type="button" hidden>Reload latest</button>
-    <button class="button button-accent" id="keepMineButton" type="button" hidden>Keep mine</button>
-    <button class="button button-dark" id="downloadDamagedButton" type="button" hidden>Download damaged data</button>
-    <button class="button button-ghost" id="dismissStorageNoticeButton" type="button" hidden inert>Dismiss</button>
-  </section>
+  <div id="noticeStack">
+    <section class="storage-notice" id="storageNotice" role="status" aria-live="polite" hidden inert>
+      <p id="storageNoticeMessage"></p>
+      <button class="button button-dark" id="reloadLatestButton" type="button" hidden>Reload latest</button>
+      <button class="button button-accent" id="keepMineButton" type="button" hidden>Keep mine</button>
+      <button class="button button-dark" id="downloadDamagedButton" type="button" hidden>Download damaged data</button>
+      <button class="button button-ghost" id="dismissStorageNoticeButton" type="button" hidden inert>Dismiss</button>
+    </section>
+    <section class="update-notice" id="updateNotice" role="status" aria-live="polite" hidden inert>
+      <p>A new version of State CV is ready.</p>
+      <button class="button button-accent" id="applyUpdateButton" type="button" disabled inert>Update now</button>
+      <button class="button button-ghost" id="laterUpdateButton" type="button">Later</button>
+    </section>
+  </div>
   <section class="launch-screen" id="launchScreen" aria-label="State CV start screen">
     <div class="launch-glow launch-glow-one"></div>
     <div class="launch-glow launch-glow-two"></div>
@@ -138,6 +145,7 @@
       <div><dt>Approximate stored size</dt><dd id="dataStoredSize">Calculating…</dd></div>
       <div><dt>Persistence request</dt><dd id="dataPersistenceStatus">Not requested yet</dd></div>
       <div><dt>Current persistence</dt><dd id="dataLivePersistenceStatus">Checking…</dd></div>
+      <div><dt>App version</dt><dd id="dataAppVersion">Checking…</dd></div>
     </dl>
     <p class="data-dialog-note">Storage behavior can differ when opening index.html directly from your device; this does not imply the same behavior as the hosted site.</p>
     <section class="data-snapshots" aria-labelledby="snapshotsTitle">
