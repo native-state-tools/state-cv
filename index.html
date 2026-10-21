@@ -25,8 +25,9 @@
     </section>
     <section class="update-notice" id="updateNotice" role="status" aria-live="polite" hidden inert>
       <p>A new version of State CV is ready.</p>
-      <button class="button button-accent" id="applyUpdateButton" type="button" disabled inert>Update now</button>
+      <button class="button button-accent" id="applyUpdateButton" type="button" aria-describedby="updateBlockedHint" disabled inert>Update now</button>
       <button class="button button-ghost" id="laterUpdateButton" type="button">Later</button>
+      <p id="updateBlockedHint" hidden inert>Resolve the notice above first.</p>
     </section>
   </div>
   <section class="launch-screen" id="launchScreen" aria-label="State CV start screen">

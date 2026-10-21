@@ -34,6 +34,8 @@ let damagedRaw = null;
 let damagedCopyStored = false;
 let loadedRevision = 0;
 let storageConflict = false;
+let storageNoticeKind = null;
+let storageUnavailableDismissed = false;
 let serviceWorkerRegistration = null;
 let waitingServiceWorker = null;
 let updateNoticeDismissed = false;
@@ -235,7 +237,7 @@ function saveData({ force = false } = {}) {
     storageConflict = false;
     if (replacingDamagedData) {
       showDamagedNotice('The original damaged data is preserved separately. Download it if you need the raw file.');
-    } else {
+    } else if (storageNoticeKind === 'unavailable') {
       hideStorageNotice();
     }
     setStatus('saved', 'Saved locally');
@@ -254,7 +256,7 @@ function saveData({ force = false } = {}) {
     }
     storageWriteFailed = true;
     showStorageUnavailableNotice('Browser storage could not be written. Changes are not being saved.');
-    setStatus('error', 'Local save unavailable');
+    setStatus('error', 'Not saving: storage unavailable');
     console.error('State CV could not save locally.', error);
     return false;
   }
@@ -370,6 +372,7 @@ function cancelScheduledSave() {
 
 function showStorageConflict(revision) {
   storageConflict = true;
+  storageNoticeKind = 'conflict';
   const notice = document.querySelector('#storageNotice');
   notice.querySelector('#storageNoticeMessage').textContent =
     'This CV was saved in another tab. Reload the latest version, or keep your changes and replace it.';
@@ -385,6 +388,7 @@ function showStorageConflict(revision) {
 }
 
 function showDamagedNotice(message) {
+  storageNoticeKind = 'damaged';
   const notice = document.querySelector('#storageNotice');
   notice.querySelector('#storageNoticeMessage').textContent = message ||
     (damagedCopyStored
@@ -402,6 +406,8 @@ function showDamagedNotice(message) {
 }
 
 function showStorageUnavailableNotice(message) {
+  if (storageUnavailableDismissed) return;
+  storageNoticeKind = 'unavailable';
   const notice = document.querySelector('#storageNotice');
   notice.querySelector('#storageNoticeMessage').textContent = message ||
     'Browser storage could not be read. State CV will not overwrite saved data.';
@@ -648,8 +654,10 @@ function clearAllData() {
   }
 }
 
-function hideStorageNotice() {
+function hideStorageNotice({ dismissed = false } = {}) {
   const notice = document.querySelector('#storageNotice');
+  if (dismissed && storageNoticeKind === 'unavailable') storageUnavailableDismissed = true;
+  storageNoticeKind = null;
   if (notice.contains(document.activeElement)) {
     const focusTarget = document.querySelector('#appShell').inert ? '#continueButton' : '#brandHome';
     document.querySelector(focusTarget).focus();
@@ -709,7 +717,7 @@ function keepMine() {
     const currentRevision = stateStorage.getDataRevision(STORAGE_KEY);
     snapshotLatestStored();
     loadedRevision = currentRevision;
-    saveData({ force: true });
+    if (saveData({ force: true })) hideStorageNotice();
   } catch (error) {
     setStatus('error', 'Latest version could not be checked');
     console.error('State CV could not preserve the latest saved data.', error);
@@ -848,10 +856,10 @@ function updateCompletion() {
 }
 
 function setStatus(state, message) {
-  if (storageDamaged) {
+  if (state !== 'error' && storageDamaged) {
     state = 'error';
     message = 'Not saving: damaged data';
-  } else if (storageLoadFailed || storageWriteFailed) {
+  } else if (state !== 'error' && (storageLoadFailed || storageWriteFailed)) {
     state = 'error';
     message = 'Not saving: storage unavailable';
   }
@@ -1383,7 +1391,7 @@ document.querySelector('#resumeForm').addEventListener('submit', (event) => even
 document.querySelector('#reloadLatestButton').addEventListener('click', reloadLatestData);
 document.querySelector('#keepMineButton').addEventListener('click', keepMine);
 document.querySelector('#downloadDamagedButton').addEventListener('click', downloadDamagedData);
-document.querySelector('#dismissStorageNoticeButton').addEventListener('click', hideStorageNotice);
+document.querySelector('#dismissStorageNoticeButton').addEventListener('click', () => hideStorageNotice({ dismissed: true }));
 
 renderFields();
 updatePreview();
@@ -1413,6 +1421,9 @@ function updateUpdateButtonState() {
   const blocked = storageConflict || storageLoadFailed || storageDamaged || storageWriteFailed;
   button.disabled = blocked || !waitingServiceWorker;
   button.inert = blocked || !waitingServiceWorker;
+  const hint = document.querySelector('#updateBlockedHint');
+  hint.hidden = !blocked;
+  hint.inert = !blocked;
 }
 
 function showUpdateNotice(worker) {

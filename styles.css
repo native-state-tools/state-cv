@@ -70,6 +70,7 @@ button { cursor: pointer; }
 .storage-notice p, .update-notice p { flex: 1 1 260px; line-height: 1.5; margin: 0; min-width: 0; }
 .storage-notice[hidden], .update-notice[hidden] { display: none; }
 #applyUpdateButton:disabled { cursor: not-allowed; opacity: .55; }
+#updateBlockedHint { color: var(--muted); flex-basis: 100%; font-size: 12px; }
 .button { border: 1px solid #3a3359; border-radius: 7px; font-size: 12px; font-weight: 800; letter-spacing: .02em; min-height: 32px; padding: 6px 11px; transition: transform .18s, background .18s; }
 .button:hover { transform: translateY(-1px); }
 .button-ghost, .button-dark { color: #e7e2fa; }
