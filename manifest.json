@@ -3,6 +3,7 @@
   "short_name": "State CV",
   "description": "Local-first ATS-compatible CV builder by Native State Tools",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0d0a1c",
   "theme_color": "#17132d",

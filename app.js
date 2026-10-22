@@ -601,9 +601,15 @@ function restoreSnapshot(index, normalizedData) {
   }
 }
 
+let dataDialogReturnFocus = null;
 function openYourDataDialog() {
   renderYourDataDialog();
-  document.querySelector('#yourDataDialog').showModal();
+  const dialog = document.querySelector('#yourDataDialog');
+  const opener = document.activeElement;
+  dataDialogReturnFocus = opener instanceof HTMLElement && opener.closest('.more-menu')
+    ? document.querySelector('.more-menu summary')
+    : opener;
+  dialog.showModal();
 }
 
 function closeYourDataDialog() {
@@ -755,6 +761,7 @@ function renderRepeaters() {
 
 function renderRepeater(listId, templateId, items, createBlankRecord) {
   const list = document.querySelector(`#${listId}`);
+  const entryType = listId === 'experienceList' ? 'experience' : 'education';
   list.replaceChildren();
   items.forEach((item, index) => {
     const node = document.querySelector(`#${templateId}`).content.cloneNode(true);
@@ -762,7 +769,10 @@ function renderRepeater(listId, templateId, items, createBlankRecord) {
       field.value = item[field.dataset.key] || '';
       field.addEventListener('input', () => { item[field.dataset.key] = field.value; updatePreview(); updateCompletion(); scheduleSave(); });
     });
-    node.querySelector('.remove-item').addEventListener('click', () => {
+    const removeButton = node.querySelector('.remove-item');
+    removeButton.setAttribute('aria-label', `Remove ${entryType} entry ${index + 1}`);
+    removeButton.title = `Remove ${entryType} entry ${index + 1}`;
+    removeButton.addEventListener('click', () => {
       items.splice(index, 1);
       if (!items.length) items.push(createBlankRecord());
       renderRepeaters(); updatePreview(); updateCompletion(); scheduleSave();
@@ -1138,71 +1148,79 @@ document.querySelector('#addEducation').addEventListener('click', () => {
   resumeData.education.push({ degree: '', school: '', dates: '' }); renderRepeaters(); updateCompletion(); scheduleSave();
 });
 function exportPdf() {
-  if (!window.jspdf?.jsPDF) {
-    window.print();
-    if (isIosDevice()) setImportStatus('If PDF opens, tap Share > Save to Files');
-    return;
-  }
-  const { jsPDF } = window.jspdf;
-  const paperSize = document.querySelector('#paperSize').value;
-  const doc = new jsPDF({ unit: 'pt', format: paperSize, compress: true });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 44;
-  const contentWidth = pageWidth - margin * 2;
-  let y = margin;
-  const { basics, summary, experience, education, skills } = resumeData;
-  const ensureSpace = (height) => { if (y + height > pageHeight - margin) { doc.addPage(); y = margin; } };
-  const writeLines = (text, size, options = {}) => {
-    doc.setFont('helvetica', options.bold ? 'bold' : 'normal');
-    doc.setFontSize(size);
-    const lines = doc.splitTextToSize(String(text || ''), options.width || contentWidth);
-    ensureSpace(lines.length * (options.leading || size * 1.35));
-    doc.text(lines, options.x || margin, y, { align: options.align || 'left' });
-    y += lines.length * (options.leading || size * 1.35);
-  };
-  const sectionHeading = (label) => {
-    ensureSpace(28);
-    y += 13;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(35, 42, 39); doc.text(label.toUpperCase(), margin, y);
-    y += 5; doc.setDrawColor(170, 178, 173); doc.setLineWidth(.6); doc.line(margin, y, pageWidth - margin, y); y += 12;
-  };
+  setImportStatus('Preparing PDF export...');
+  try {
+    if (!window.jspdf?.jsPDF) {
+      setImportStatus('PDF library unavailable. Use the print dialog to save as PDF.');
+      window.print();
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const paperSize = document.querySelector('#paperSize').value;
+    const doc = new jsPDF({ unit: 'pt', format: paperSize, compress: true });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 44;
+    const contentWidth = pageWidth - margin * 2;
+    let y = margin;
+    const { basics, summary, experience, education, skills } = resumeData;
+    const ensureSpace = (height) => { if (y + height > pageHeight - margin) { doc.addPage(); y = margin; } };
+    const writeLines = (text, size, options = {}) => {
+      doc.setFont('helvetica', options.bold ? 'bold' : 'normal');
+      doc.setFontSize(size);
+      const lines = doc.splitTextToSize(String(text || ''), options.width || contentWidth);
+      ensureSpace(lines.length * (options.leading || size * 1.35));
+      doc.text(lines, options.x || margin, y, { align: options.align || 'left' });
+      y += lines.length * (options.leading || size * 1.35);
+    };
+    const sectionHeading = (label) => {
+      ensureSpace(28);
+      y += 13;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(35, 42, 39); doc.text(label.toUpperCase(), margin, y);
+      y += 5; doc.setDrawColor(170, 178, 173); doc.setLineWidth(.6); doc.line(margin, y, pageWidth - margin, y); y += 12;
+    };
 
-  doc.setTextColor(29, 36, 33);
-  writeLines(basics.name || 'Your Name', 22, { bold: true, leading: 25 });
-  writeLines((basics.title || 'Professional Title').toUpperCase(), 8.5, { leading: 12 });
-  const contact = [basics.location, basics.email, basics.phone, basics.website].filter(Boolean).join('  ·  ');
-  if (contact) writeLines(contact, 8.5, { leading: 12 });
-  y += 5; doc.setDrawColor(29, 36, 33); doc.setLineWidth(1.4); doc.line(margin, y, pageWidth - margin, y);
-  if (summary) { sectionHeading('Professional Summary'); writeLines(summary, 9, { leading: 12 }); }
-  if (experience.some((item) => item.role || item.company || item.highlights)) {
-    sectionHeading('Experience');
-    experience.filter((item) => item.role || item.company || item.highlights).forEach((item) => {
-      ensureSpace(42);
-      const role = item.role || 'Role';
-      if (item.dates) {
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-        doc.setTextColor(82, 91, 86);
-        doc.text(item.dates, pageWidth - margin, y, { align: 'right' });
-      }
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-      doc.setTextColor(29, 36, 33);
-      const roleWidth = item.dates ? contentWidth - 100 : contentWidth;
-      writeLines(role, 10, { bold: true, width: roleWidth, leading: 13 });
-      if (item.company) writeLines(item.company, 8.5, { leading: 11 });
-      doc.setTextColor(29, 36, 33);
-      if (item.highlights) item.highlights.split('\n').filter(Boolean).forEach((bullet) => { writeLines(`• ${bullet}`, 8.5, { x: margin + 8, width: contentWidth - 8, leading: 11 }); });
-      y += 5;
-    });
+    doc.setTextColor(29, 36, 33);
+    writeLines(basics.name || 'Your Name', 22, { bold: true, leading: 25 });
+    writeLines((basics.title || 'Professional Title').toUpperCase(), 8.5, { leading: 12 });
+    const contact = [basics.location, basics.email, basics.phone, basics.website].filter(Boolean).join('  ·  ');
+    if (contact) writeLines(contact, 8.5, { leading: 12 });
+    y += 5; doc.setDrawColor(29, 36, 33); doc.setLineWidth(1.4); doc.line(margin, y, pageWidth - margin, y);
+    if (summary) { sectionHeading('Professional Summary'); writeLines(summary, 9, { leading: 12 }); }
+    if (experience.some((item) => item.role || item.company || item.highlights)) {
+      sectionHeading('Experience');
+      experience.filter((item) => item.role || item.company || item.highlights).forEach((item) => {
+        ensureSpace(42);
+        const role = item.role || 'Role';
+        if (item.dates) {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+          doc.setTextColor(82, 91, 86);
+          doc.text(item.dates, pageWidth - margin, y, { align: 'right' });
+        }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+        doc.setTextColor(29, 36, 33);
+        const roleWidth = item.dates ? contentWidth - 100 : contentWidth;
+        writeLines(role, 10, { bold: true, width: roleWidth, leading: 13 });
+        if (item.company) writeLines(item.company, 8.5, { leading: 11 });
+        doc.setTextColor(29, 36, 33);
+        if (item.highlights) item.highlights.split('\n').filter(Boolean).forEach((bullet) => { writeLines(`• ${bullet}`, 8.5, { x: margin + 8, width: contentWidth - 8, leading: 11 }); });
+        y += 5;
+      });
+    }
+    if (education.some((item) => item.degree || item.school)) {
+      sectionHeading('Education');
+      education.filter((item) => item.degree || item.school).forEach((item) => { ensureSpace(28); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(item.degree || 'Degree', margin, y); if (item.dates) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(item.dates, pageWidth - margin, y, { align: 'right' }); } y += 12; if (item.school) writeLines(item.school, 8.5, { leading: 11 }); y += 4; });
+    }
+    if (skills) { sectionHeading('Skills'); writeLines(skills, 9, { leading: 12 }); }
+    const filename = `${safeFilename(document.querySelector('#exportFilename').value || basics.name || 'CV')}.pdf`;
+    doc.save(filename);
+    setImportStatus(isIosDevice()
+      ? 'PDF exported. If it opens, tap Share > Save to Files'
+      : 'PDF exported. Download started.');
+  } catch (error) {
+    console.error('State CV could not export a PDF.', error);
+    setImportStatus('PDF export failed. Please try again.', true);
   }
-  if (education.some((item) => item.degree || item.school)) {
-    sectionHeading('Education');
-    education.filter((item) => item.degree || item.school).forEach((item) => { ensureSpace(28); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(item.degree || 'Degree', margin, y); if (item.dates) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(item.dates, pageWidth - margin, y, { align: 'right' }); } y += 12; if (item.school) writeLines(item.school, 8.5, { leading: 11 }); y += 4; });
-  }
-  if (skills) { sectionHeading('Skills'); writeLines(skills, 9, { leading: 12 }); }
-  const filename = `${safeFilename(document.querySelector('#exportFilename').value || basics.name || 'CV')}.pdf`;
-  doc.save(filename);
-  setImportStatus(isIosDevice() ? 'If PDF opens, tap Share > Save to Files' : 'PDF downloaded');
 }
 document.querySelector('#printButton').addEventListener('click', exportPdf);
 let editViewScrollY = 0;
@@ -1316,11 +1334,33 @@ document.querySelector('#exportButton').addEventListener('click', downloadBackup
 document.querySelector('#yourDataButton').addEventListener('click', openYourDataDialog);
 document.querySelector('#closeYourDataButton').addEventListener('click', closeYourDataDialog);
 document.querySelector('#closeYourDataFooterButton').addEventListener('click', closeYourDataDialog);
-document.querySelector('#yourDataDialog').addEventListener('close', () => moreMenuButton.focus());
+document.querySelector('#yourDataDialog').addEventListener('close', () => {
+  if (dataDialogReturnFocus instanceof HTMLElement && dataDialogReturnFocus.isConnected) dataDialogReturnFocus.focus();
+  dataDialogReturnFocus = null;
+});
 document.querySelector('#yourDataDialog').addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.preventDefault();
     closeYourDataDialog();
+    return;
+  }
+  if (event.key === 'Tab') {
+    const dialog = event.currentTarget;
+    const focusable = [...dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.hidden && !element.closest('[hidden], [inert]') && element.getClientRects().length);
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 });
 document.querySelector('#yourDataDialog').addEventListener('cancel', (event) => {

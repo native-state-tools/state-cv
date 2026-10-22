@@ -16,14 +16,14 @@
 </head>
 <body>
   <div id="noticeStack">
-    <section class="storage-notice" id="storageNotice" role="status" aria-live="polite" hidden inert>
+    <section class="storage-notice" id="storageNotice" role="status" hidden inert>
       <p id="storageNoticeMessage"></p>
       <button class="button button-dark" id="reloadLatestButton" type="button" hidden>Reload latest</button>
       <button class="button button-accent" id="keepMineButton" type="button" hidden>Keep mine</button>
       <button class="button button-dark" id="downloadDamagedButton" type="button" hidden>Download damaged data</button>
       <button class="button button-ghost" id="dismissStorageNoticeButton" type="button" hidden inert>Dismiss</button>
     </section>
-    <section class="update-notice" id="updateNotice" role="status" aria-live="polite" hidden inert>
+    <section class="update-notice" id="updateNotice" role="status" hidden inert>
       <p>A new version of State CV is ready.</p>
       <button class="button button-accent" id="applyUpdateButton" type="button" aria-describedby="updateBlockedHint" disabled inert>Update now</button>
       <button class="button button-ghost" id="laterUpdateButton" type="button">Later</button>
@@ -66,7 +66,7 @@
             <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup (JSON)</button>
             <button class="button button-dark" id="yourDataButton" type="button">Your data</button>
             <label class="paper-size-control" title="Choose your PDF page size"><span>PDF page size</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
-            <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
+            <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" enterkeyhint="done" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
             <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
           </div>
         </details>
@@ -94,18 +94,18 @@
           <section class="form-section">
             <div class="section-heading"><span class="section-number">01</span><div><h2>Contact details</h2><p>The essentials recruiters look for first.</p></div></div>
             <div class="form-grid">
-              <label class="field field-wide"><span>Full name</span><input data-path="basics.name" maxlength="200" placeholder="Alex Morgan" /></label>
-              <label class="field"><span>Professional title</span><input data-path="basics.title" maxlength="200" placeholder="Product Designer" /></label>
-              <label class="field"><span>Location</span><input data-path="basics.location" maxlength="200" placeholder="Austin, TX" /></label>
-              <label class="field"><span>Email</span><input data-path="basics.email" type="email" maxlength="254" placeholder="alex@email.com" /></label>
-              <label class="field"><span>Phone</span><input data-path="basics.phone" maxlength="40" placeholder="(555) 123-4567" /></label>
-              <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" maxlength="300" placeholder="linkedin.com/in/alexmorgan" /></label>
+              <label class="field field-wide"><span>Full name</span><input data-path="basics.name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Alex Morgan" /></label>
+              <label class="field"><span>Professional title</span><input data-path="basics.title" type="text" autocomplete="organization-title" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Product Designer" /></label>
+              <label class="field"><span>Location</span><input data-path="basics.location" type="text" autocomplete="address-level2" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Austin, TX" /></label>
+              <label class="field"><span>Email</span><input data-path="basics.email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="254" placeholder="alex@email.com" /></label>
+              <label class="field"><span>Phone</span><input data-path="basics.phone" type="tel" inputmode="tel" autocomplete="tel" autocapitalize="off" spellcheck="false" enterkeyhint="next" maxlength="40" placeholder="(555) 123-4567" /></label>
+              <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" type="url" inputmode="url" autocomplete="url" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="300" placeholder="linkedin.com/in/alexmorgan" /></label>
             </div>
           </section>
 
           <section class="form-section">
             <div class="section-heading"><span class="section-number">02</span><div><h2>Professional summary</h2><p>Two to four lines that frame your value.</p></div></div>
-            <label class="field"><span>Summary <b class="character-count" id="summaryCount">0 / 500</b></span><textarea data-path="summary" maxlength="500" rows="5" placeholder="Product designer with 6+ years turning complex workflows into clear, useful experiences. Known for pairing thoughtful research with fast, measurable execution."></textarea></label>
+            <label class="field"><span>Summary <b class="character-count" id="summaryCount">0 / 500</b></span><textarea data-path="summary" enterkeyhint="enter" maxlength="500" rows="5" placeholder="Product designer with 6+ years turning complex workflows into clear, useful experiences. Known for pairing thoughtful research with fast, measurable execution."></textarea></label>
           </section>
 
           <section class="form-section">
@@ -120,7 +120,7 @@
 
           <section class="form-section">
             <div class="section-heading"><span class="section-number">05</span><div><h2>Skills</h2><p>Use the language of your target role.</p></div></div>
-            <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" maxlength="2000" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
+            <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" type="text" enterkeyhint="done" maxlength="2000" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
           </section>
         </form>
       </section>
@@ -154,7 +154,7 @@
       <p id="snapshotsEmpty">No snapshots yet.</p>
       <div id="snapshotsList"></div>
     </section>
-    <p class="data-dialog-status" id="dataDialogStatus" role="status" aria-live="polite"></p>
+    <p class="data-dialog-status" id="dataDialogStatus" role="status"></p>
     <div class="data-dialog-actions">
       <button class="button button-dark" id="downloadBackupButton" type="button">Download backup</button>
       <button class="button button-dark" id="downloadDamagedDialogButton" type="button" hidden inert>Download damaged data</button>
@@ -163,10 +163,10 @@
     </div>
   </dialog>
   <template id="experienceTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button" title="Remove experience" aria-label="Remove experience">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>
+    <article class="repeat-item"><button class="remove-item" type="button">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" type="text" enterkeyhint="next" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" type="text" enterkeyhint="next" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" enterkeyhint="enter" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>
   </template>
   <template id="educationTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button" title="Remove education" aria-label="Remove education">×</button><div class="form-grid"><label class="field field-wide"><span>Degree or credential</span><input data-key="degree" maxlength="200" placeholder="BFA, Interaction Design" /></label><label class="field"><span>School</span><input data-key="school" maxlength="200" placeholder="State University" /></label><label class="field"><span>Dates</span><input data-key="dates" maxlength="100" placeholder="2014 — 2018" /></label></div></article>
+    <article class="repeat-item"><button class="remove-item" type="button">×</button><div class="form-grid"><label class="field field-wide"><span>Degree or credential</span><input data-key="degree" type="text" enterkeyhint="next" maxlength="200" placeholder="BFA, Interaction Design" /></label><label class="field"><span>School</span><input data-key="school" type="text" enterkeyhint="next" maxlength="200" placeholder="State University" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2014 — 2018" /></label></div></article>
   </template>
   <script src="storage.js"></script>
   <script src="app.js"></script>
