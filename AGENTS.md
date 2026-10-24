@@ -1,38 +1,53 @@
 # State CV Agent Instructions
 
-## Project Profile
+## Start here
 
-- State CV is a local-first, privacy-first ATS CV builder by Native State Tools. Read [PRIVACY.md](PRIVACY.md) before changing data flows and [README.md](README.md) for supported behavior.
-- The current app is a vanilla HTML/CSS/JavaScript browser app. `app.js` owns editor state, local persistence, PDF import, and PDF export; `index.html` owns markup and the CSP; `styles.css` owns presentation.
+- Read `plan.md` at the repo root before starting work. It is the master plan: roadmap, current phase, decisions, and notes for AI assistants. It is kept local and is not committed (see `.gitignore`), so it may be missing in a fresh clone; if it is, ask the owner for it rather than guessing the current phase.
+- Read [PRIVACY.md](PRIVACY.md) before changing anything that touches data handling, and [README.md](README.md) for supported behavior.
+- Work on one sub-phase at a time, on its own branch. Do not start work outside the current sub-phase without approval.
+
+## Project profile
+
+- State CV is a local-first, privacy-first ATS CV builder by Native State Tools.
+- Vanilla HTML/CSS/JavaScript, hosted on GitHub Pages. `app.js` owns editor state, PDF import and PDF export; `storage.js` owns local persistence (revisions, snapshots, damaged-data quarantine); `index.html` owns markup and the CSP; `styles.css` owns presentation; `sw.js` is the offline service worker.
 - `server.js` is only a Node built-in-module static development server bound to `127.0.0.1:3000`. It is not an application backend.
-- PDF.js and jsPDF are vendored in `vendor/`. Do not replace them with CDN scripts or runtime package downloads.
+- PDF.js 3.11.174 and jsPDF 2.5.1 are vendored in `vendor/`. Never replace them with CDN scripts or runtime downloads.
 
-## Non-Negotiable Constraints
+## Non-negotiable constraints
 
-- Keep all user data on the device. Do not add accounts, authentication, cloud databases, sync services, analytics, telemetry, tracking, or outbound runtime requests.
-- Preserve and tighten the Content Security Policy when needed. Keep scripts, styles, workers, fonts, images, and connections local unless a change is explicitly justified and reviewed against the privacy policy.
-- Treat browser storage as a fallback tier, not a cloud substitute. Keep JSON backup and restore human-readable and usable as the universal data bridge.
-- Escape user-controlled text before inserting it into HTML. Validate imported files and retain local size and parsing limits.
-- Update `PRIVACY.md` whenever behavior affecting data handling changes. Keep `README.md` accurate for commands, offline behavior, and user-visible features.
+- **Data stays on the device.** No analytics, telemetry, tracking, or outbound runtime requests. No Web Share or any other path that sends a CV off the device without a separate privacy review. Accounts, sync and cloud storage are out of scope until a reviewed phase in `plan.md` approves them.
+- **CSP is a meta tag** (GitHub Pages cannot send headers). Preserve and tighten it. Keep scripts, styles, workers, fonts, images and connections local.
+- **Classic scripts only.** No ES modules. `index.html` must keep working when opened from `file://`. New script files load in order from `index.html`.
+- **No dynamic HTML.** Build UI with DOM calls (`createElement`, `textContent`). Never use `innerHTML`, `insertAdjacentHTML` or `outerHTML` with dynamic data. No inline `style` attributes and no `setAttribute('style')`; CSSOM (`el.style.x`, `style.setProperty`) is fine.
+- **Storage format is fixed.** Do not change storage keys or the data format without a migration. Keys: `state-cv-data-v1`, `state-cv-snapshots-v1`, `state-cv-damaged-v1`, `state-cv-persistence-v1`. Keep JSON backup and restore human-readable.
+- **Service worker:** bump `CACHE_NAME` in `sw.js` on ANY change to a precached file, and add new precached files to its list.
+- **Approval required** before editing `vendor/`, adding any dependency, or bundling any new asset (fonts, libraries). The only dev dependency is `@playwright/test`.
+- Validate imported files and keep the existing size, page and parsing limits.
+- Update `PRIVACY.md` whenever data handling changes, and keep `README.md` accurate for commands, offline behavior and user-visible features.
 
-## Implementation Preferences
+## Accessibility
 
-- Prefer vanilla JavaScript and existing local helpers over adding a framework or abstraction. Keep state normalization and storage behavior deterministic.
-- Keep the existing public file layout and vendored dependency approach unless the task requires a migration.
-- A root-level `storage.js` is approved for Phase 2 local-storage work.
-- For a new native project, prefer Tauri with vanilla HTML/CSS/JS. Android via Tauri or Capacitor is the next target; do not add iOS support unless explicitly requested. Challenge Firebase/Supabase, auth, analytics, auto-sync, Electron, and framework lock-in because they conflict with the project profile.
-- For a new repository, create `ARCHITECTURE.md` and `PRIVACY.md` before application code, and include `LICENSE`, `README.md`, and `src/storage.js`. Do not create those scaffolding files as unrelated work in this existing State CV repository.
+- Hide inactive views with `inert`. Do not add `aria-hidden` on top of it.
+- Visible `:focus-visible` on every interactive element. Contrast of at least 4.5:1 for text and 3:1 for UI borders and focus rings (enforced by a test). Use the existing color variables (`--line`, `--control-border`, `--focus-ring`, `--notice-border`, `--muted`) rather than new hardcoded colors.
+- Respect `prefers-reduced-motion`. Inputs stay at 16px or larger. Touch targets stay at 44px on coarse pointers. Status messages use `role="status"` without a duplicate `aria-live`.
 
-## Validation
+## Code details that are easy to break
 
-- Run `npm start` for the local smoke test and open `127.0.0.1:3000`; direct opening of `index.html` should remain supported.
-- Verify changes with networking disabled when practical. Check local autosave, JSON backup/restore, PDF import, PDF export, and responsive behavior when those paths are touched.
-- Confirm there are no new external URLs, package downloads, console errors, CSP violations, or data transmissions.
+- Source files use CRLF line endings. Keep CRLF when editing.
+- Unit tests slice real functions out of `app.js` using `indexOf` markers. Do not break these boundaries: the line right after `importPdfLines` is `document.querySelectorAll('[data-path]').forEach(...)`, and the `restoreSnapshot` slice ends at `\nfunction openYourDataDialog()`. If code moves, update the markers in the same change.
+- New logic that needs unit tests should be pure functions (no DOM access) so tests can extract them.
+- The existing e2e PDF test exports a blank CV and expects status `/PDF exported.*(Download started|Save to Files)/`. It must keep passing.
 
-## Testing and CI
+## Testing and validation
 
-- Run `npm run lint`, `npm run lint:selftest`, `npm run test:unit`, and `npm run test:e2e`.
-- Keep classic scripts (including `file://` support); preserve the CSP: no inline style attributes, `setAttribute('style')`, dynamic `innerHTML`/HTML insertion, module scripts, or external runtime requests.
-- Bump `CACHE_NAME` for any precached-file change. Do not edit `vendor/` or add dependencies without approval.
-- Do not push or merge. Put screenshots outside the repository (`C:\Users\brian\test-shots\`). The browser window is about 706x604 and cannot resize; use Playwright/JS measurements for viewport claims.
-- Approved Phase 4 dev files: `tests/unit/*.test.js`, `tests/e2e/*.spec.js`, `playwright.config.js`, `scripts/lint-csp.js`, `.github/workflows/ci.yml`; `@playwright/test` is dev-only.
+- Run `npm run lint`, `npm run lint:selftest`, `npm run test:unit` and `npm run test:e2e`. Report each as PASS / FAIL / COULD NOT TEST with the command output. Do not claim a result you did not see.
+- Smoke test with `npm start` at `127.0.0.1:3000`; opening `index.html` directly must still work.
+- Confirm there are no new external URLs, package downloads, console errors, CSP violations or data transmissions. Verify with networking disabled when practical.
+- Use the Playwright projects (360x640, 390x844, 1440x900) for viewport claims, not a manually resized window.
+- Mobile is tested on Android only. iPhone/iOS is not a tested target; do not raise or schedule iOS work.
+
+## Git and housekeeping
+
+- Do not push or merge. The owner reviews and merges.
+- Restore any localStorage you change during testing.
+- Put screenshots and other scratch files outside the repository (`C:\Users\brian\test-shots\`).
