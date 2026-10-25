@@ -190,6 +190,24 @@ textarea { line-height: 1.5; resize: vertical; }
 .entry-company { color: #65716b; margin-top: 2px; }
 .entry-bullets { color: #46514c; font-size: 9px; line-height: 1.55; margin: 6px 0 0; padding-left: 14px; }
 .entry-bullets li { margin-bottom: 3px; }
+.preview-text-compact .entry-bullets,
+.preview-text-compact .skills-line { font-size: 7.7px; }
+.preview-text-compact .entry-role { font-size: 10px; }
+.preview-text-compact .entry-company { font-size: 7.7px; }
+.preview-text-compact .entry-date { font-size: 7.2px; }
+.preview-text-compact .resume-section > h3 { font-size: 7.8px; }
+.preview-text-standard .entry-bullets,
+.preview-text-standard .skills-line { font-size: 9px; }
+.preview-text-standard .entry-role { font-size: 11px; }
+.preview-text-standard .entry-company { font-size: 9px; }
+.preview-text-standard .entry-date { font-size: 8px; }
+.preview-text-standard .resume-section > h3 { font-size: 9px; }
+.preview-text-large .entry-bullets,
+.preview-text-large .skills-line { font-size: 10.3px; }
+.preview-text-large .entry-role { font-size: 12.5px; }
+.preview-text-large .entry-company { font-size: 9.9px; }
+.preview-text-large .entry-date { font-size: 9.2px; }
+.preview-text-large .resume-section > h3 { font-size: 9.8px; }
 .empty-preview { color: #a2aaa6; font-size: 12px; line-height: 1.6; padding: 60px 0; text-align: center; }
 .mobile-view-nav { display: none; }
 

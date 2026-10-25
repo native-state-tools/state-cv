@@ -30,7 +30,8 @@ npm run test:e2e
 - A **Your data** dialog with the last-save time, approximate storage size, persistence request result and live browser status, snapshot restore, backup download, damaged-data download, and two-step clear
 - JSON import and export for backup (imports up to 2 MB); backups are versioned and validated before use
 - PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
-- Native selectable-text PDF export in Letter or A4 format with live status feedback
+- Native selectable-text PDF export in Letter or A4, with Compact, Standard, or Large text, clickable email and website links, and a warning when a character cannot be drawn
+- Copy or download the same CV as plain text on this device
 - Responsive editor, full-screen preview, and an Edit | Preview | Export bottom bar on screens narrower than 1024px
 - No account or external service required
 
@@ -38,7 +39,7 @@ PDF import reads selectable text in the browser and maps common contact, summary
 
 Letter is the default for US applications. A4 is available for international applications.
 
-The `Export PDF` button creates a native Letter or A4 PDF with selectable text, controlled page breaks, and no browser date, URL, or page labels. The browser print dialog is only used as a fallback if the local PDF library cannot load.
+The `Export PDF` button creates a native Letter or A4 PDF with selectable text, controlled page breaks, and no browser date, URL, or page labels. The browser print dialog is only used as a fallback if the local PDF library cannot load. The More menu can also copy the CV as plain text or download a .txt file; both stay on this device.
 
 ## Offline operation
 
