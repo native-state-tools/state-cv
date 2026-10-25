@@ -69,6 +69,95 @@ async function savedName(page) {
   });
 }
 
+const filledCv = {
+  schemaVersion: 1,
+  basics: {
+    name: 'Alex Morgan',
+    title: 'Product Designer',
+    location: 'Austin, TX',
+    email: 'alex@example.com',
+    phone: '(555) 123-4567',
+    website: 'linkedin.com/in/alexmorgan'
+  },
+  exportName: 'Alex Morgan CV',
+  summary: 'Product designer with six years turning complex workflows into clear, useful experiences for operations teams. Partners with research and engineering to ship tools people can learn quickly. Recent work focused on onboarding, design systems, and accessibility reviews.',
+  experience: [
+    {
+      role: 'Senior Product Designer',
+      company: 'Northstar Labs',
+      dates: '2020 - 2024',
+      highlights: 'Redesigned onboarding and raised activation.\nShipped a design system used by four product teams.\nLed research that cut support contacts.'
+    },
+    {
+      role: 'Product Designer',
+      company: 'Harbor Studio',
+      dates: '2018 - 2020',
+      highlights: 'Built the client portal used by regional offices.\nPaired with engineers on weekly releases.\nDocumented patterns for new hires.'
+    },
+    {
+      role: 'Design Intern',
+      company: 'Fieldwork',
+      dates: '2017 - 2018',
+      highlights: 'Prototyped the scheduling flow.\nOrganized research notes for the team.\nPresented findings each Friday.'
+    },
+    { role: '', company: 'Placeholder Check Co', dates: '', highlights: '' }
+  ],
+  education: [
+    {
+      degree: 'Bachelor of Fine Arts in Interaction Design, Visual Communication, and Human-Computer Interaction',
+      school: 'State University',
+      dates: '2014 - 2018'
+    },
+    { degree: '', school: 'City College', dates: '2019' }
+  ],
+  skills: 'Figma, user research, prototyping, design systems, accessibility, workshop facilitation'
+};
+
+async function openStoredCv(page, data) {
+  await page.addInitScript((stored) => {
+    localStorage.setItem('state-cv-data-v1', stored);
+  }, JSON.stringify(data));
+  await openApp(page);
+  await enterEditor(page);
+}
+
+async function readPdfDocument(page, download) {
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const bytes = await fs.readFile(downloadPath);
+  const parsed = await page.evaluate(async (pdfBytes) => {
+    const loadingTask = window.pdfjsLib.getDocument({
+      data: new Uint8Array(pdfBytes),
+      isEvalSupported: false,
+      enableXfa: false,
+      disableFontFace: true,
+      useWorkerFetch: false,
+      verbosity: 0
+    });
+    try {
+      const pdf = await loadingTask.promise;
+      const items = [];
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const pdfPage = await pdf.getPage(pageNumber);
+        const content = await pdfPage.getTextContent();
+        content.items.forEach((item) => {
+          if (item.str) items.push(item.str);
+        });
+      }
+      return { pageCount: pdf.numPages, items };
+    } finally {
+      await loadingTask.destroy().catch(() => {});
+    }
+  }, Array.from(bytes));
+  return { bytes, ...parsed };
+}
+
+async function exportPdfDownload(page) {
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export PDF' }).click();
+  return readPdfDocument(page, await downloadPromise);
+}
+
 test('start screen shows the expected local CV options', async ({ page }) => {
   await openApp(page);
   await expect(page.getByRole('button', { name: 'Start a new CV' })).toBeVisible();
@@ -497,6 +586,148 @@ test('PDF export fires a download containing a PDF file', async ({ page }) => {
   const bytes = await fs.readFile(downloadPath);
   expect(bytes.subarray(0, 4).toString('ascii')).toBe('%PDF');
   await expect(page.locator('#saveStatus')).toContainText(/PDF exported.*(Download started|Save to Files)/);
+});
+
+test('PDF export of a filled CV keeps reading order and omits placeholders', async ({ page }) => {
+  await openStoredCv(page, filledCv);
+  const exported = await exportPdfDownload(page);
+  const text = exported.items.join('');
+  const pieces = exported.items.map((item) => item.trim());
+  expect(exported.bytes.subarray(0, 4).toString('ascii')).toBe('%PDF');
+  expect(exported.pageCount).toBe(1);
+  const role = text.indexOf('Senior Product Designer');
+  const company = text.indexOf('Northstar Labs');
+  const dates = text.indexOf('2020 - 2024');
+  expect(role).toBeGreaterThanOrEqual(0);
+  expect(company).toBeGreaterThan(role);
+  expect(dates).toBeGreaterThan(company);
+  expect(text.indexOf('Redesigned onboarding')).toBeGreaterThan(dates);
+  const degree = text.indexOf('Interaction Design');
+  const school = text.indexOf('State University');
+  const eduDates = text.indexOf('2014 - 2018');
+  expect(degree).toBeGreaterThanOrEqual(0);
+  expect(school).toBeGreaterThan(degree);
+  expect(eduDates).toBeGreaterThan(school);
+  expect(text.indexOf('Austin, TX')).toBeGreaterThanOrEqual(0);
+  expect(text.indexOf('alex@example.com')).toBeGreaterThan(text.indexOf('Austin, TX'));
+  expect(text.indexOf('(555) 123-4567')).toBeGreaterThan(text.indexOf('alex@example.com'));
+  expect(text.indexOf('linkedin.com/in/alexmorgan')).toBeGreaterThan(text.indexOf('(555) 123-4567'));
+  expect(text).toContain('|');
+  expect(text).not.toContain('\u00B7');
+  expect(pieces).not.toContain('Role');
+  expect(pieces).not.toContain('Degree');
+  const raw = exported.bytes.toString('latin1');
+  expect(raw).toContain('mailto:alex@example.com');
+  expect(raw).toContain('https://linkedin.com/in/alexmorgan');
+  expect(raw).toContain('/Lang (en)');
+  expect(raw).toContain('Alex Morgan');
+
+  await page.getByLabel('Full name').fill('');
+  await page.getByLabel('Professional title').fill('');
+  await expect(page.locator('#saveStatus')).toContainText('Saved locally');
+  const withoutHeader = await exportPdfDownload(page);
+  const headerPieces = withoutHeader.items.map((item) => item.trim());
+  expect(headerPieces).not.toContain('Your Name');
+  expect(headerPieces).not.toContain('Professional Title');
+  expect(headerPieces).not.toContain('PROFESSIONAL TITLE');
+  expect(withoutHeader.items.join('')).toContain('Northstar Labs');
+  await expect(page.locator('#saveStatus')).toContainText(/PDF exported.*(Download started|Save to Files)/);
+});
+
+test('plain text download contains the CV in reading order', async ({ page }) => {
+  await openStoredCv(page, filledCv);
+  await page.locator('.more-menu summary').click();
+  await expect(page.locator('#textSize')).toHaveValue('standard');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download .txt' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('Alex Morgan CV.txt');
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const content = await fs.readFile(downloadPath, 'utf8');
+  const role = content.indexOf('Senior Product Designer');
+  const company = content.indexOf('Northstar Labs');
+  const dates = content.indexOf('2020 - 2024');
+  expect(content.indexOf('Experience')).toBeGreaterThanOrEqual(0);
+  expect(content.indexOf('Experience')).toBeLessThan(role);
+  expect(role).toBeLessThan(company);
+  expect(company).toBeLessThan(dates);
+  expect(content.indexOf('- Redesigned onboarding')).toBeGreaterThan(dates);
+  const degree = content.indexOf('Interaction Design');
+  const school = content.indexOf('State University');
+  expect(content.indexOf('Education')).toBeLessThan(degree);
+  expect(degree).toBeLessThan(school);
+  expect(school).toBeLessThan(content.indexOf('2014 - 2018'));
+  expect(content).toContain('Professional Summary');
+  expect(content).toContain('Skills');
+  expect(content).toContain('Austin, TX | alex@example.com | (555) 123-4567 | linkedin.com/in/alexmorgan');
+  expect(content).not.toContain('Your Name');
+  expect(content).not.toContain('Professional Title');
+  expect(content).not.toContain('Role');
+  expect(content).not.toContain('Degree');
+  await expect(page.locator('#saveStatus')).toContainText('Plain text downloaded');
+});
+
+test('Text size Large increases the preview bullet size', async ({ page, isMobile }) => {
+  await openStoredCv(page, filledCv);
+  const preview = page.locator('#resumePreview');
+  await expect(preview).toHaveClass(/preview-text-standard/);
+  if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const bullet = preview.locator('.entry-bullets li').first();
+  const standardSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
+  if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.locator('.more-menu summary').click();
+  await page.locator('#textSize').selectOption('large');
+  await expect(preview).toHaveClass(/preview-text-large/);
+  await expect(preview).not.toHaveClass(/preview-text-standard/);
+  if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const largeSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
+  expect(largeSize).toBeGreaterThan(standardSize);
+});
+
+test('Copy as plain text shows a local status', async ({ page, context }) => {
+  let permissionsGranted = true;
+  try {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:3000' });
+  } catch (error) {
+    permissionsGranted = false;
+  }
+  await openStoredCv(page, filledCv);
+  await page.locator('.more-menu summary').click();
+  await page.getByRole('button', { name: 'Copy as plain text' }).click();
+  await expect(page.locator('#saveStatus')).toContainText(
+    permissionsGranted ? 'Plain text copied' : /Plain text copied|Clipboard blocked\. Plain text downloaded/
+  );
+});
+
+test('unsupported characters are named when a PDF is exported', async ({ page }) => {
+  await openStoredCv(page, {
+    schemaVersion: 1,
+    basics: {
+      name: 'Łukasz Đặng',
+      title: '',
+      location: '',
+      email: 'lukasz@example.com',
+      phone: '',
+      website: ''
+    },
+    exportName: 'Lukasz CV',
+    summary: '',
+    experience: [{ role: 'Designer', company: 'Studio', dates: '2021 - 2024', highlights: '' }],
+    education: [{ degree: '', school: '', dates: '' }],
+    skills: ''
+  });
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export PDF' }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  expect((await fs.readFile(downloadPath)).subarray(0, 4).toString('ascii')).toBe('%PDF');
+  const status = await page.locator('#saveStatus').textContent();
+  expect(status).toContain('PDF exported');
+  expect(status).toContain('Ł');
+  expect(status).toContain('Đ');
+  expect(status).toContain('ặ');
 });
 
 test('service worker controls the app and supports an offline reload', async ({ page }) => {

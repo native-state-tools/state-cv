@@ -64,8 +64,11 @@
           <summary class="button button-ghost" aria-controls="moreMenuContent">More</summary>
           <div class="more-menu-content" id="moreMenuContent">
             <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup (JSON)</button>
+            <button class="button button-dark" id="copyPlainTextButton" type="button">Copy as plain text</button>
+            <button class="button button-dark" id="downloadPlainTextButton" type="button">Download .txt</button>
             <button class="button button-dark" id="yourDataButton" type="button">Your data</button>
             <label class="paper-size-control" title="Choose your PDF page size"><span>PDF page size</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
+            <label class="paper-size-control" title="Choose PDF text size"><span>Text size</span><select id="textSize"><option value="compact">Compact (9 pt)</option><option value="standard" selected>Standard (10.5 pt)</option><option value="large">Large (12 pt)</option></select></label>
             <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" enterkeyhint="done" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
             <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
           </div>
@@ -127,7 +130,7 @@
 
       <aside class="preview-panel" id="previewPanel" aria-label="CV preview">
         <div class="preview-toolbar"><div><span class="live-dot"></span><span>Live preview</span></div><span class="format-label" id="formatLabel">Letter / selectable text</span></div>
-        <div class="paper-wrap"><article class="resume-paper" id="resumePreview"></article></div>
+        <div class="paper-wrap"><article class="resume-paper preview-text-standard" id="resumePreview"></article></div>
       </aside>
     </main>
     <nav class="mobile-view-nav" aria-label="Editor navigation">
