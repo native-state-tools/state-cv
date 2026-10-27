@@ -1137,6 +1137,75 @@ function startNewCv({ confirmReplacement = true } = {}) {
   if (saved) closeLaunchScreen();
 }
 
+function pdfItemBoxes(items) {
+  const boxes = [];
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    if (!item || typeof item.str !== 'string' || !item.str.trim()) return;
+    const transform = Array.isArray(item.transform) ? item.transform : [];
+    const x = Number(transform[4]) || 0;
+    const y = Number(transform[5]) || 0;
+    const width = Math.max(0, Number(item.width) || 0);
+    const size = Math.abs(Number(item.height)) || Math.hypot(Number(transform[2]) || 0, Number(transform[3]) || 0) || 10;
+    boxes.push({ x, y, end: x + width, width, size, text: item.str });
+  });
+  return boxes;
+}
+
+function splitPdfColumns(boxes) {
+  if (boxes.length < 12) return [boxes];
+  const minX = Math.min(...boxes.map((box) => box.x));
+  const maxX = Math.max(...boxes.map((box) => box.end));
+  const span = maxX - minX;
+  if (!(span > 0) || boxes.some((box) => !box.width)) return [boxes];
+  const rowsOf = (list, top, bottom) => new Set(list.filter((box) => box.y <= top + 1 && box.y >= bottom - 1).map((box) => Math.round(box.y))).size;
+  const candidates = [...new Set(boxes.map((box) => box.x))].filter((x) => x > minX + span * 0.2 && x < minX + span * 0.8).sort((a, b) => a - b);
+  for (const gutter of candidates) {
+    const left = boxes.filter((box) => box.end <= gutter - 1);
+    const right = boxes.filter((box) => box.x >= gutter - 0.5);
+    if (left.length < 4 || right.length < 4) continue;
+    const cross = boxes.filter((box) => !left.includes(box) && !right.includes(box));
+    const top = Math.min(Math.max(...left.map((box) => box.y)), Math.max(...right.map((box) => box.y)));
+    const bottom = Math.max(Math.min(...left.map((box) => box.y)), Math.min(...right.map((box) => box.y)));
+    if (top <= bottom) continue;
+    if (cross.some((box) => box.y <= top + 1 && box.y >= bottom - 1)) continue;
+    if (rowsOf(left, top, bottom) < 4 || rowsOf(right, top, bottom) < 4) continue;
+    if (right.filter((box) => box.y <= top + 1 && box.y >= bottom - 1 && !dateLine(box.text)).length < 3) continue;
+    return [cross.filter((box) => box.y > top), left, right, cross.filter((box) => box.y < bottom)].filter((group) => group.length);
+  }
+  return [boxes];
+}
+
+function pdfBoxesToLines(boxes) {
+  const rows = [];
+  boxes.forEach((box) => {
+    const row = rows.find((candidate) => Math.abs(candidate.y - box.y) < 4);
+    if (row) row.boxes.push(box);
+    else rows.push({ y: box.y, boxes: [box] });
+  });
+  return rows.sort((a, b) => b.y - a.y).map((row) => {
+    let text = '';
+    let previous = null;
+    row.boxes.sort((a, b) => a.x - b.x).forEach((box) => {
+      if (!previous) text = box.text;
+      else {
+        const gap = box.x - previous.end;
+        const size = Math.max(previous.size, box.size);
+        let separator = ' ';
+        if (previous.width && gap > size * 2) separator = '\t';
+        else if (previous.width && gap <= size * 0.12 && !/\s$/.test(text) && !/^\s/.test(box.text)) separator = '';
+        text += separator + box.text;
+      }
+      previous = previous ? { ...box, end: Math.max(previous.end, box.end) } : box;
+    });
+    return text.replace(/\s*@\s*/g, '@').replace(/[^\S\t]+/g, ' ').replace(/ *\t[\s]*/g, '\t').trim();
+  }).filter(Boolean);
+}
+
+function pdfItemsToLines(items) {
+  return splitPdfColumns(pdfItemBoxes(items)).flatMap(pdfBoxesToLines)
+    .filter((line) => !/^(?:.*\s)?page\s+\d+(?:\s*(?:of|\/)\s*\d+)?$/i.test(line) && !/^\d+\s*(?:of|\/)\s*\d+$/i.test(line));
+}
+
 async function extractPdfText(file) {
   if (!window.pdfjsLib) throw new Error('PDF reader is unavailable. The local vendor files may be missing.');
   const buffer = await file.arrayBuffer();
@@ -1157,18 +1226,11 @@ async function extractPdfText(file) {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      const rows = [];
       content.items.forEach((item) => {
         textChars += item.str.length;
         if (textChars > MAX_PDF_TEXT_CHARS) throw new ImportError('This PDF contains too much text to import.');
-        if (!item.str.trim()) return;
-        const x = item.transform[4];
-        const y = item.transform[5];
-        const row = rows.find((candidate) => Math.abs(candidate.y - y) < 4);
-        if (row) row.items.push({ x, text: item.str });
-        else rows.push({ y, items: [{ x, text: item.str }] });
       });
-      pages.push(rows.sort((a, b) => b.y - a.y).map((row) => row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(' ').replace(/\s*@\s*/g, '@').replace(/\s+/g, ' ').trim()).filter(Boolean));
+      pages.push(pdfItemsToLines(content.items));
     }
     const appChrome = new RegExp(`^\\d{1,2}\\/\\d{1,2}\\/\\d{2,4},?\\s+.*${APP_NAME.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')} \\| .*`, 'i');
     return pages.flat().filter((line) => line && !appChrome.test(line) && !/^localhost:\d+\s+\d+\/\d+$/i.test(line));
@@ -1192,7 +1254,7 @@ function sectionType(line) {
   if (/^(professional )?summary$|^profile$|^objective$|^about me$|^career profile$|^professional profile$/.test(heading)) return 'summary';
   if (/^(professional |work |career )?experience$|^employment( history)?$|^career history$|^work history$|^relevant experience$|^selected experience$/.test(heading)) return 'experience';
   if (/^education$|^academic background$|^education (and|&) certifications?$|^certifications?$|^licenses( and certifications)?$/.test(heading)) return 'education';
-  if (/^skills$|^technical skills$|^core competencies$|^areas of expertise$|^tools( and technologies)?$|^technology( stack)?$|^key skills$/.test(heading)) return 'skills';
+  if (/^(skills|technical skills|core competencies|areas of expertise|tools( and technologies)?|technology( stack)?|key skills|core skills|skills (and|&) tools)$/.test(heading)) return 'skills';
   return '';
 }
 
@@ -1208,73 +1270,92 @@ function splitPdfSections(lines) {
 }
 
 function dateLine(line) {
-  return /(?:\d{1,2}[/-])?(?:19|20)\d{2}\s*(?:[-–—]|to)\s*(?:(?:\d{1,2}[/-])?(?:19|20)\d{2}|present|current)|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:19|20)\d{2}/i.test(line);
+  return IMPORT_DATE_PATTERN.test(String(line ?? ''));
 }
 
 function extractDate(line) {
-  return line.match(/(?:\d{1,2}[/-])?(?:19|20)\d{2}\s*(?:[-–—]|to)\s*(?:(?:\d{1,2}[/-])?(?:19|20)\d{2}|present|current)|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:19|20)\d{2}/i)?.[0] || '';
+  return String(line ?? '').match(IMPORT_DATE_PATTERN)?.[0] || '';
 }
 
-function cleanImportedLine(line) { return line.replace(/^[•●▪◦*-]\s*/, '').replace(/\s+/g, ' ').trim(); }
+const IMPORT_MONTH = '\\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?';
+const IMPORT_DATE_POINT = `(?:${IMPORT_MONTH}\\s+|\\b\\d{1,2}[/.-])?(?:19|20)\\d{2}\\b`;
+const IMPORT_DATE_PATTERN = new RegExp(`${IMPORT_DATE_POINT}\\s*(?:[-–—]|to|until)\\s*(?:${IMPORT_DATE_POINT}|present\\b|current\\b|now\\b|today\\b)|${IMPORT_MONTH}\\s+(?:19|20)\\d{2}\\b`, 'i');
+const IMPORT_BULLET = /^\s*(?:[•●▪◦‣*]|[-–](?=\s))\s*/;
+
+function cleanImportedLine(line) { return String(line ?? '').replace(IMPORT_BULLET, '').replace(/\s+/g, ' ').trim(); }
+
+function trimImportSeparators(value) { return String(value ?? '').replace(/^[\s|·•,;–—-]+|[\s|·•,;–—-]+$/g, ''); }
+
+function splitImportParts(line) {
+  return String(line ?? '').split(/\s*(?:\t|\||·|\s[—–]\s)\s*/).map((part) => trimImportSeparators(cleanImportedLine(part))).filter(Boolean);
+}
 
 function mergeWrappedLines(values) {
   return values.reduce((merged, value) => {
-    const hasBullet = /^[•●▪◦*-]\s*/.test(value);
+    const hasBullet = IMPORT_BULLET.test(value);
     const current = cleanImportedLine(value);
+    if (!current) return merged;
     const previous = merged.at(-1) || '';
-    if (merged.length && !hasBullet && !/[.!?]$/.test(previous)) merged[merged.length - 1] = `${previous} ${current}`;
+    if (merged.length && !hasBullet && !/[.!?]$/.test(previous)) merged[merged.length - 1] = /[A-Za-z]-$/.test(previous) && /^[a-z]/.test(current) ? `${previous}${current}` : `${previous} ${current}`;
     else merged.push(current);
     return merged;
   }, []);
 }
 
-function parseJobHeader(line) {
-  const value = cleanImportedLine(line);
-  const pipeParts = value.split('|').map((part) => part.trim()).filter(Boolean);
-  if (pipeParts.length > 1) return { role: pipeParts[0], company: pipeParts[1].split(/\s+[—–-]\s+/)[0].trim() };
-  const dashParts = value.split(/\s+[—–]\s+/).map((part) => part.trim()).filter(Boolean);
-  return { role: dashParts[0] || value, company: dashParts[1] || '' };
-}
-
-function isJobHeader(line) {
-  const value = cleanImportedLine(line);
-  return !dateLine(value) && value.length < 140 && (/\|/.test(value) || /\s+[—–]\s+/.test(value));
-}
-
 function parseExperience(lines) {
   if (!lines?.length) return [];
-  const records = [];
-  let pending = [];
-  let current = null;
-  const addHighlights = (record, values) => {
-    const highlights = mergeWrappedLines(values).filter((value) => value.length > 10).join('\n');
-    if (record && highlights) record.highlights = [record.highlights, highlights].filter(Boolean).join('\n');
-  };
-  lines.forEach((line) => {
-    if (!dateLine(line)) { pending.push(line); return; }
-    const values = pending.map(cleanImportedLine).filter(Boolean);
+  const raw = lines.map((line) => String(line ?? ''));
+  const isBullet = (line) => IMPORT_BULLET.test(line);
+  const isAnchor = (line) => {
+    if (isBullet(line)) return false;
     const date = extractDate(line);
-    const inlineHeader = cleanImportedLine(line.replace(date, '').trim());
-    const headerIndex = values.findLastIndex(isJobHeader);
-    const nextHeader = headerIndex >= 0 ? parseJobHeader(values[headerIndex]) : (inlineHeader ? { role: inlineHeader, company: '' } : null);
-    if (current) {
-      if (!current.company && values.length && !/^[•●▪◦*-]/.test(values[0]) && !isJobHeader(values[0])) current.company = values.shift();
-      const carry = nextHeader && headerIndex >= 0 ? values.slice(0, headerIndex) : values;
-      addHighlights(current, carry);
-      if (current.role || current.company || current.highlights) records.push(current);
-    }
-    current = nextHeader ? { ...nextHeader, dates: date, highlights: '' } : { role: '', company: '', dates: date, highlights: '' };
-    pending = [];
-  });
-  if (current) {
-    if (!current.company && pending.length && !/^[•●▪◦*-]/.test(cleanImportedLine(pending[0]))) current.company = cleanImportedLine(pending.shift());
-    addHighlights(current, pending);
-    if (current.role || current.company || current.highlights) records.push(current);
-  } else if (pending.length) {
-    const values = pending.map(cleanImportedLine).filter(Boolean);
-    records.push({ role: values[0] || '', company: values[1] || '', dates: '', highlights: values.slice(2).join('\n') });
+    if (!date) return false;
+    const rest = cleanImportedLine(line.replace(date, ''));
+    return rest.length <= 90 && !/[.!?]$/.test(rest);
+  };
+  const headerLike = (line) => {
+    if (line === undefined || isBullet(line) || dateLine(line)) return false;
+    const value = cleanImportedLine(line);
+    return Boolean(value) && value.length <= 80 && !/[.!?;:]$/.test(value) && value.split(' ').length <= 10 && !/^[a-z]/.test(value);
+  };
+  const anchors = raw.map((line, index) => (isAnchor(line) ? index : -1)).filter((index) => index >= 0);
+  if (!anchors.length) {
+    const values = raw.map(cleanImportedLine).filter(Boolean);
+    return values.length ? [{ role: values[0] || '', company: values[1] || '', dates: '', highlights: values.slice(2).join('\n') }] : [];
   }
-  return records;
+  const jobs = [];
+  let consumedUntil = -1;
+  anchors.forEach((anchor, position) => {
+    const nextAnchor = anchors[position + 1] ?? raw.length;
+    const date = extractDate(raw[anchor]).replace(/\s+/g, ' ').trim();
+    const rest = splitImportParts(raw[anchor].replace(extractDate(raw[anchor]), ''));
+    const prev = anchor - 1 > consumedUntil && headerLike(raw[anchor - 1]) ? anchor - 1 : -1;
+    const prev2 = prev - 1 > consumedUntil && headerLike(raw[prev - 1]) ? prev - 1 : -1;
+    const next = anchor + 1 < nextAnchor && anchor + 2 !== nextAnchor && headerLike(raw[anchor + 1]) ? anchor + 1 : -1;
+    const joined = (index) => splitImportParts(raw[index]).join(', ');
+    let role = '';
+    let company = '';
+    let start = anchor;
+    let end = anchor;
+    if (!rest.length) {
+      if (prev2 >= 0) { role = joined(prev2); company = joined(prev); start = prev2; }
+      else if (prev >= 0) { role = joined(prev); start = prev; if (next >= 0) { company = joined(next); end = next; } }
+    } else if (prev >= 0 && next < 0) {
+      role = joined(prev); company = rest.join(', '); start = prev;
+    } else if (rest.length >= 2) {
+      role = rest[0]; company = rest.slice(1).join(', ');
+    } else {
+      role = rest[0];
+      if (next >= 0) { company = joined(next); end = next; }
+    }
+    jobs.push({ role, company, dates: date, start, end });
+    consumedUntil = end;
+  });
+  return jobs.map((job, index) => {
+    const stop = index + 1 < jobs.length ? jobs[index + 1].start : raw.length;
+    const highlights = mergeWrappedLines(raw.slice(job.end + 1, stop)).filter((value) => value.length > 10).join('\n');
+    return { role: job.role, company: job.company, dates: job.dates, highlights };
+  }).filter((job) => job.role || job.company || job.highlights);
 }
 
 function parseEducation(lines) {
@@ -1283,17 +1364,18 @@ function parseEducation(lines) {
   let group = [];
   let activeDates = '';
   const flush = (dates = activeDates) => {
-    const values = group.map(cleanImportedLine).filter(Boolean);
+    let values = group.map((value) => trimImportSeparators(cleanImportedLine(value))).filter(Boolean);
     if (!values.length) { group = []; return; }
-    records.push({ degree: values.at(-2) || values[0] || '', school: values.at(-1) || '', dates });
+    if (values.length === 1) values = splitImportParts(group[0]);
+    records.push({ degree: values.length > 1 ? values.at(-2) : values[0] || '', school: values.length > 1 ? values.at(-1) : '', dates });
     group = [];
   };
   lines.forEach((line) => {
     if (!dateLine(line)) { group.push(line); return; }
     const date = extractDate(line);
-    const rest = date ? cleanImportedLine(line.replace(date, '')) : '';
+    const rest = date ? trimImportSeparators(cleanImportedLine(line.replace(date, ''))) : '';
     if (!rest) {
-      activeDates = line;
+      activeDates = date || cleanImportedLine(line);
       if (group.length) flush(activeDates);
       return;
     }
@@ -1308,8 +1390,15 @@ function parseEducation(lines) {
 function splitSkills(lines) {
   const seen = new Set();
   const skills = [];
-  (Array.isArray(lines) ? lines : []).forEach((line) => {
-    String(line).split(/[,|;]|[•·▪]/).forEach((part) => {
+  const merged = [];
+  (Array.isArray(lines) ? lines : []).forEach((value) => {
+    const line = String(value);
+    const previous = merged.at(-1);
+    if (previous !== undefined && /[,;|]/.test(previous) && !/[,;|]\s*$/.test(previous) && /^[a-z]/.test(line.trim())) merged[merged.length - 1] = `${previous} ${line.trim()}`;
+    else merged.push(line);
+  });
+  merged.forEach((line) => {
+    line.split(/[,|;\t]|[•·▪]/).forEach((part) => {
       const skill = part.replace(/^[•●▪◦·\u2013\u2014*-]\s*/, '').replace(/\s+/g, ' ').trim();
       if (!skill || seen.has(skill)) return;
       seen.add(skill);
@@ -1359,21 +1448,25 @@ function importPdfLines(lines) {
   const text = lines.join('\n');
   const sections = splitPdfSections(lines);
   const { email, phone, website } = detectContact(text);
-  const emailIndex = lines.findIndex((line) => line.includes(email));
+  const emailIndex = email ? lines.findIndex((line) => line.includes(email)) : -1;
+  const sectionAfterHeader = lines.findIndex((line, index) => index > Math.max(emailIndex, 0) && sectionType(line));
+  const headerRegion = lines.slice(0, sectionAfterHeader >= 0 ? sectionAfterHeader : Math.min(lines.length, 8));
   const headerLines = lines.slice(0, emailIndex >= 0 ? emailIndex + 1 : 6).map(cleanImportedLine).filter((line) => line && !line.includes(email) && !line.match(/[\w.+-]+@[\w-]+\.[\w.-]+/i));
   const isHeaderLabel = (line) => Boolean(sectionType(line)) || /^(resume|curriculum vitae|contact|professional (title|summary|experience)|work history|employment history|career history|personal details)$/i.test(line);
+  const looksLikeLocation = (part) => /^[A-Z][A-Za-z.'\- ]{1,40},\s*(?:[A-Z]{2}|[A-Z][a-z]+(?: [A-Z][a-z]+)*)$/.test(part) && !/@|\d/.test(part);
   const name = headerLines.find((line) => line.length < 60 && !dateLine(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/)) || '';
-  const titleCandidate = headerLines.find((line) => line !== name && line.length < 70 && !dateLine(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/));
+  const titleCandidate = headerLines.find((line) => line !== name && line.length < 70 && !dateLine(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/) && !looksLikeLocation(line) && !/[|\t]/.test(line));
   const title = titleCandidate && !/@/.test(titleCandidate) ? titleCandidate : '';
-  const locationCandidate = headerLines.find((line) => /,\s*[A-Z]{2}\b/.test(line) && line !== name && !line.includes(name));
-  const location = locationCandidate?.replace(email, '').replace(phone, '').replace(website, '').trim() || '';
+  const location = headerRegion.flatMap(splitImportParts).find((part) => part !== name && looksLikeLocation(part)) || '';
+  const summary = mergeWrappedLines((sections.summary || []).map((line) => line.replace(/\t/g, ' '))).join(' ');
   const importedExperience = parseExperience(sections.experience);
   const importedEducation = parseEducation(sections.education);
   const detectedBasics = { name, title, location, email, phone, website };
-  if (Object.values(detectedBasics).some(Boolean)) resumeData.basics = { ...resumeData.basics, ...Object.fromEntries(Object.entries(detectedBasics).filter(([, value]) => value)) };
+  resumeData = structuredClone(defaultData);
+  resumeData.basics = { ...resumeData.basics, ...detectedBasics };
   resumeData.exportName = name ? `${name} CV` : 'CV';
   document.querySelector('#exportFilename').removeAttribute('data-edited');
-  if (sections.summary?.length) resumeData.summary = sections.summary.join(' ').slice(0, 500);
+  if (summary) resumeData.summary = summary.slice(0, 500);
   if (sections.skills?.length) resumeData.skills = splitSkills(sections.skills);
   if (importedExperience.length) resumeData.experience = importedExperience;
   if (importedEducation.length) resumeData.education = importedEducation;

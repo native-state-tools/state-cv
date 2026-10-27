@@ -1062,3 +1062,114 @@ test('Backup reminder Download backup starts a JSON download and resets the coun
   expect(lastBackupAt).toBeGreaterThan(Date.now() - 60_000);
   await expect(notice).toBeHidden();
 });
+
+const fixtureJobs = [
+  ['Senior Operations Analyst', 'Mar 2021 \u2013 Present', 3],
+  ['Operations Analyst', 'Jun 2018 \u2013 Feb 2021', 3],
+  ['Logistics Coordinator', 'Aug 2016 \u2013 May 2018', 2]
+];
+
+const commaSkills = [
+  'SQL',
+  'Excel (pivot tables)',
+  'Tableau',
+  'Python (pandas)',
+  'Process improvement',
+  'Forecasting',
+  'Vendor negotiation',
+  'Stakeholder reporting'
+];
+
+const cityCompanies = [
+  'Harbor Logistics Group, Austin, TX',
+  'Brightline Retail, Dallas, TX',
+  'Lone Star Freight, Houston, TX'
+];
+
+const importFixtures = [
+  {
+    file: 'cv1-classic-single-column.pdf',
+    title: 'Import fixture cv1 classic single column',
+    companies: cityCompanies,
+    skills: commaSkills
+  },
+  {
+    file: 'cv2-two-column-sidebar.pdf',
+    title: 'Import fixture cv2 two column sidebar',
+    companies: ['Harbor Logistics Group', 'Brightline Retail', 'Lone Star Freight'],
+    skills: commaSkills
+  },
+  {
+    file: 'cv3-word-style-tables.pdf',
+    title: 'Import fixture cv3 word style tables',
+    companies: cityCompanies,
+    skills: [
+      'SQL',
+      'Process improvement',
+      'Excel',
+      'Forecasting',
+      'Tableau',
+      'Vendor negotiation',
+      'Python (pandas)',
+      'Stakeholder reporting'
+    ]
+  },
+  {
+    file: 'cv4-google-docs-style.pdf',
+    title: 'Import fixture cv4 google docs style',
+    companies: cityCompanies,
+    skills: commaSkills
+  }
+];
+
+async function importPdfFixture(page, filename) {
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', filename));
+  await expect(page.getByLabel('Full name')).toHaveValue('Jordan Ellis');
+}
+
+async function expectImportedFixture(page, { companies, skills }) {
+  await expect(page.getByLabel('Email')).toHaveValue('jordan.ellis@example.com');
+  await expect(page.getByLabel('Phone')).toHaveValue('(512) 555-0147');
+  await expect(page.getByLabel('Location')).toHaveValue('Austin, TX');
+
+  const experience = page.locator('#experienceList article');
+  await expect(experience).toHaveCount(3);
+  for (let index = 0; index < fixtureJobs.length; index += 1) {
+    const entry = experience.nth(index);
+    await expect(entry.getByLabel('Job title')).toHaveValue(fixtureJobs[index][0]);
+    await expect(entry.getByLabel('Company')).toHaveValue(companies[index]);
+    await expect(entry.getByLabel('Dates')).toHaveValue(fixtureJobs[index][1]);
+    const highlights = await entry.getByLabel(/^Highlights/).inputValue();
+    expect(highlights.split(/\n/).filter((line) => line.trim())).toHaveLength(fixtureJobs[index][2]);
+  }
+
+  const education = page.locator('#educationList article');
+  await expect(education).toHaveCount(1);
+  await expect(education.getByLabel('Degree or credential')).toHaveValue('B.S., Supply Chain Management');
+  await expect(education.getByLabel('School')).toHaveValue('University of Texas at Austin');
+  await expect(education.getByLabel('Dates')).toHaveValue('2012 \u2013 2016');
+
+  const importedSkills = (await page.getByLabel(/^Skills/).inputValue()).split(',').map((skill) => skill.trim()).filter(Boolean);
+  expect(importedSkills).toEqual(skills);
+  expect(importedSkills).toHaveLength(8);
+}
+
+for (const fixture of importFixtures) {
+  test(fixture.title, async ({ page }) => {
+    await openApp(page);
+    await importPdfFixture(page, fixture.file);
+    await expectImportedFixture(page, fixture);
+  });
+}
+
+test('Import fixture replaces old values', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Professional title').fill('5151');
+  await page.getByLabel('Location').fill('566');
+  await expect(page.getByLabel('Professional title')).toHaveValue('5151');
+  await expect(page.getByLabel('Location')).toHaveValue('566');
+  await importPdfFixture(page, 'cv1-classic-single-column.pdf');
+  await expect(page.getByLabel('Professional title')).toHaveValue('');
+  await expect(page.getByLabel('Location')).toHaveValue('Austin, TX');
+});

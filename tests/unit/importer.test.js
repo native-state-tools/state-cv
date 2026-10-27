@@ -15,16 +15,20 @@ function sliceBetween(startMarker, endMarker) {
 
 const sandbox = vm.createContext({});
 vm.runInContext([
+  sliceBetween('function pdfItemBoxes(items) {', '\nasync function extractPdfText('),
   sliceBetween('function dateLine(line) {', '\nfunction mergeWrappedLines('),
   sliceBetween('function parseEducation(lines) {', '\nfunction splitSkills('),
   sliceBetween('function splitSkills(lines) {', '\nfunction detectContact('),
   sliceBetween('function detectContact(text) {', '\nfunction importPdfLines('),
+  'globalThis.pdfItemsToLines = pdfItemsToLines;',
+  'globalThis.dateLine = dateLine;',
+  'globalThis.extractDate = extractDate;',
   'globalThis.parseEducation = parseEducation;',
   'globalThis.splitSkills = splitSkills;',
   'globalThis.detectContact = detectContact;'
 ].join('\n'), sandbox);
 
-const { parseEducation, splitSkills, detectContact } = sandbox;
+const { pdfItemsToLines, dateLine, extractDate, parseEducation, splitSkills, detectContact } = sandbox;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('detectContact reads phone formats and skips dates, ids, and the email domain', () => {
@@ -110,4 +114,47 @@ test('parseEducation keeps degree text on a row that also has dates', () => {
 test('inferredTitle no longer exists in app.js', () => {
   assert.equal(appSource.includes('inferredTitle'), false);
   assert.equal(appSource.toLowerCase().includes('logistics professional'), false);
+});
+
+test('date pattern reads month, numeric, and to ranges', () => {
+  const ranges = ['Mar 2021 \u2013 Present', '05/2018 - 06/2020', '2015 to 2019'];
+  ranges.forEach((range) => {
+    assert.equal(dateLine(range), true);
+    assert.equal(extractDate(range), range);
+  });
+});
+
+function pdfTextItem(str, x, y, width, size = 10) {
+  return { str, width, height: size, transform: [size, 0, 0, size, x, y] };
+}
+
+test('pdfItemsToLines joins a ligature, reads columns, keeps a right-aligned date, and drops a page footer', () => {
+  assert.deepEqual(plain(pdfItemsToLines([
+    pdfTextItem('fi', 0, 100, 8),
+    pdfTextItem('nance', 8, 100, 36)
+  ])), ['finance']);
+
+  const left = ['Summary', 'Reporting', 'Forecasts', 'Warehouses', 'Mentoring', 'Shipments'];
+  const right = ['Profile', 'Contact', 'Education', 'Skills', 'Projects', 'History'];
+  const columns = [];
+  left.forEach((text, index) => columns.push(pdfTextItem(text, 40, 700 - index * 20, 80)));
+  right.forEach((text, index) => columns.push(pdfTextItem(text, 320, 700 - index * 20, 80)));
+  assert.deepEqual(plain(pdfItemsToLines(columns)), [...left, ...right]);
+
+  const roles = ['Senior Operations Analyst', 'Operations Analyst', 'Logistics Coordinator', 'Warehouse Associate', 'Shipping Clerk', 'Inventory Aide'];
+  const dates = ['Mar 2021 \u2013 Present', '05/2018 - 06/2020', '2015 to 2019', 'Jun 2018 \u2013 Feb 2021', 'Aug 2016 \u2013 May 2018', 'Jan 2014 \u2013 Dec 2015'];
+  const dated = [];
+  const undated = [];
+  roles.forEach((role, index) => {
+    const y = 500 - index * 20;
+    dated.push(pdfTextItem(role, 40, y, 140), pdfTextItem(dates[index], 260, y, 100));
+    undated.push(pdfTextItem(role, 40, y, 140), pdfTextItem('Regional team', 260, y, 100));
+  });
+  assert.deepEqual(plain(pdfItemsToLines(dated)), roles.map((role, index) => `${role}\t${dates[index]}`));
+  assert.deepEqual(plain(pdfItemsToLines(undated)), [...roles, ...Array(roles.length).fill('Regional team')]);
+
+  assert.deepEqual(plain(pdfItemsToLines([
+    pdfTextItem('Jordan Ellis', 40, 700, 80),
+    pdfTextItem('Page 1 of 2', 40, 30, 70)
+  ])), ['Jordan Ellis']);
 });
