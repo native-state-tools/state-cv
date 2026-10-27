@@ -29,6 +29,16 @@
       <button class="button button-ghost" id="laterUpdateButton" type="button">Later</button>
       <p id="updateBlockedHint" hidden inert>Resolve the notice above first.</p>
     </section>
+    <section class="storage-notice" id="backupReminder" role="status" hidden inert>
+      <p>You've made a lot of changes. Download a backup to keep a copy safe.</p>
+      <button class="button button-accent" id="backupReminderDownload" type="button">Download backup</button>
+      <button class="button button-ghost" id="backupReminderLater" type="button">Not now</button>
+      <button class="button button-dark" id="backupReminderSnooze" type="button">Remind me in 7 days</button>
+    </section>
+  </div>
+  <div class="undo-toast" id="undoToast" role="status" hidden inert>
+    <p id="undoToastMessage"></p>
+    <button class="button button-accent" id="undoRemovalButton" type="button">Undo</button>
   </div>
   <section class="launch-screen" id="launchScreen" aria-label="State CV start screen">
     <div class="launch-glow launch-glow-one"></div>

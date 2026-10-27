@@ -20,6 +20,8 @@ State CV is a local-first application: your CV content stays on your device. The
 
 - **ATS tips stay in the browser.** The ATS tips panel runs locally in the browser and sends nothing anywhere.
 
+- **Backup reminders.** Backup reminders are stored only in this browser and contain no CV content.
+
 - **Files are checked on this device.** Backup files and PDFs are checked before use, with size limits. A file that fails validation never replaces the current CV. Backups include a schema version.
 
 - **No liability for lost drafts.** Because data lives only in your browser, the operator accepts no responsibility for lost work. Back up what matters to you.

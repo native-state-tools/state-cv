@@ -773,3 +773,110 @@ test('service worker controls the app and supports an offline reload', async ({ 
   }
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
 });
+
+test('Undo restores a removed experience entry and keeps it after reload', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Job title').fill('Kept this role');
+  await page.getByRole('button', { name: 'Remove experience entry 1' }).click();
+  const toast = page.locator('#undoToast');
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText('Experience entry removed');
+  await expect(page.getByLabel('Job title')).toHaveValue('');
+  const undo = page.getByRole('button', { name: 'Undo' });
+  await undo.focus();
+  await expect(undo).toBeFocused();
+  const box = await undo.boundingBox();
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  await undo.click();
+  const title = page.getByLabel('Job title');
+  await expect(title).toHaveValue('Kept this role');
+  await expect(title).toBeFocused();
+  await expect.poll(() => page.evaluate(() => {
+    const raw = localStorage.getItem('state-cv-data-v1');
+    return raw ? JSON.parse(raw).experience[0].role : '';
+  })).toBe('Kept this role');
+  await page.reload();
+  await enterEditor(page);
+  await expect(page.getByLabel('Job title')).toHaveValue('Kept this role');
+});
+
+test('Undo toast disappears when a second removal replaces it and restores that entry', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Job title').fill('Alpha Role');
+  await page.getByLabel('Degree or credential').fill('Beta Degree');
+  await page.getByRole('button', { name: 'Remove experience entry 1' }).click();
+  const toast = page.locator('#undoToast');
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText('Experience entry removed');
+  await page.getByRole('button', { name: 'Remove education entry 1' }).click();
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText('Education entry removed');
+  await expect(toast).not.toContainText('Experience entry removed');
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByLabel('Degree or credential')).toHaveValue('Beta Degree');
+  await expect(page.getByLabel('Degree or credential')).toBeFocused();
+  await expect(page.getByLabel('Job title')).toHaveValue('');
+  await expect(toast).toBeHidden();
+});
+
+test('Backup reminder shows after many edits and stays hidden after Remind me in 7 days', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('state-cv-backup-reminder-v1', JSON.stringify({
+      lastBackupAt: 0,
+      editsSinceBackup: 20,
+      snoozeUntil: 0
+    }));
+  });
+  await page.reload();
+  const notice = page.locator('#backupReminder');
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText("You've made a lot of changes. Download a backup to keep a copy safe.");
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth);
+  for (const name of ['Download backup', 'Not now', 'Remind me in 7 days']) {
+    const button = notice.getByRole('button', { name });
+    await button.focus();
+    await expect(button).toBeFocused();
+    const box = await button.boundingBox();
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+  await notice.getByRole('button', { name: 'Remind me in 7 days' }).click();
+  await expect(notice).toBeHidden();
+  const snoozeUntil = await page.evaluate(() => JSON.parse(localStorage.getItem('state-cv-backup-reminder-v1')).snoozeUntil);
+  expect(snoozeUntil).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+  await page.reload();
+  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+  await expect(notice).toBeHidden();
+});
+
+test('Backup reminder Download backup starts a JSON download and resets the counter', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('state-cv-backup-reminder-v1', JSON.stringify({
+      lastBackupAt: 0,
+      editsSinceBackup: 20,
+      snoozeUntil: 0
+    }));
+  });
+  await page.reload();
+  const notice = page.locator('#backupReminder');
+  await expect(notice).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await notice.getByRole('button', { name: 'Download backup' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.json$/i);
+  await expect.poll(() => page.evaluate(() => {
+    const raw = localStorage.getItem('state-cv-backup-reminder-v1');
+    return raw ? JSON.parse(raw).editsSinceBackup : null;
+  })).toBe(0);
+  const lastBackupAt = await page.evaluate(() => JSON.parse(localStorage.getItem('state-cv-backup-reminder-v1')).lastBackupAt);
+  expect(lastBackupAt).toBeGreaterThan(Date.now() - 60_000);
+  await expect(notice).toBeHidden();
+});
