@@ -1091,33 +1091,81 @@ function parseEducation(lines) {
     group = [];
   };
   lines.forEach((line) => {
-    if (dateLine(line)) {
+    if (!dateLine(line)) { group.push(line); return; }
+    const date = extractDate(line);
+    const rest = date ? cleanImportedLine(line.replace(date, '')) : '';
+    if (!rest) {
       activeDates = line;
       if (group.length) flush(activeDates);
+      return;
     }
-    else group.push(line);
+    if (activeDates && group.length) flush(activeDates);
+    activeDates = date;
+    group.push(rest);
   });
   if (group.length) flush(activeDates);
   return records.filter((item) => item.degree || item.school);
+}
+
+function splitSkills(lines) {
+  const seen = new Set();
+  const skills = [];
+  (Array.isArray(lines) ? lines : []).forEach((line) => {
+    String(line).split(/[,|;]|[•·▪]/).forEach((part) => {
+      const skill = part.replace(/^[•●▪◦·\u2013\u2014*-]\s*/, '').replace(/\s+/g, ' ').trim();
+      if (!skill || seen.has(skill)) return;
+      seen.add(skill);
+      skills.push(skill);
+    });
+  });
+  return skills.join(', ');
+}
+
+function detectContact(text) {
+  const source = String(text ?? '');
+  const emailMatch = source.match(/[\w.+-]+@[\w-]+\.[\w.-]+/i);
+  const email = emailMatch ? emailMatch[0] : '';
+  const emailStart = emailMatch ? emailMatch.index : -1;
+  const emailEnd = emailStart >= 0 ? emailStart + email.length : -1;
+  const emailDomain = email.includes('@') ? email.split('@')[1].toLowerCase() : '';
+  const phonePattern = /(?:\+\d{1,3}[ .]?)?(?:\(?\d{1,4}\)?[ .\-])+\d{2,4}(?:[ .\-]\d{2,4})*/g;
+  let phone = '';
+  let phoneMatch;
+  while ((phoneMatch = phonePattern.exec(source))) {
+    const candidate = phoneMatch[0];
+    const digits = candidate.replace(/\D/g, '');
+    if (digits.length < 7 || digits.length > 15) continue;
+    if (dateLine(candidate)) continue;
+    phone = candidate;
+    break;
+  }
+  const websitePattern = /(?:https?:\/\/)?(?:www\.)?(?:linkedin\.com\/[^\s]+|[\w-]+\.(?:com|me|io)(?:\/[^\s]+)?)/ig;
+  let website = '';
+  let websiteMatch;
+  while ((websiteMatch = websitePattern.exec(source))) {
+    const value = websiteMatch[0];
+    const start = websiteMatch.index;
+    const end = start + value.length;
+    if (emailStart >= 0 && start < emailEnd && end > emailStart) continue;
+    const bare = value.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '').toLowerCase();
+    if (emailDomain && bare === emailDomain) continue;
+    website = value;
+    break;
+  }
+  return { email, phone, website };
 }
 
 function importPdfLines(lines) {
   cancelScheduledSave();
   const text = lines.join('\n');
   const sections = splitPdfSections(lines);
-  const email = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/i)?.[0] || '';
-  const phone = text.match(/(?:\+?\d[\d .()\-]{8,}\d)/)?.[0] || '';
-  const emailDomain = email.split('@')[1] || '';
-  const websiteMatch = text.match(/(?:https?:\/\/)?(?:www\.)?(?:linkedin\.com\/[^\s]+|[\w-]+\.(?:com|me|io)(?:\/[^\s]+)?)/i)?.[0] || '';
-  const website = websiteMatch !== emailDomain ? websiteMatch : '';
+  const { email, phone, website } = detectContact(text);
   const emailIndex = lines.findIndex((line) => line.includes(email));
   const headerLines = lines.slice(0, emailIndex >= 0 ? emailIndex + 1 : 6).map(cleanImportedLine).filter((line) => line && !line.includes(email) && !line.match(/[\w.+-]+@[\w-]+\.[\w.-]+/i));
   const isHeaderLabel = (line) => Boolean(sectionType(line)) || /^(resume|curriculum vitae|contact|professional (title|summary|experience)|work history|employment history|career history|personal details)$/i.test(line);
   const name = headerLines.find((line) => line.length < 60 && !dateLine(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/)) || '';
   const titleCandidate = headerLines.find((line) => line !== name && line.length < 70 && !dateLine(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/));
-  const summaryText = sections.summary?.join(' ') || '';
-  const inferredTitle = /operations,? sales,? and logistics professional/i.test(summaryText) ? 'Operations, Sales & Logistics Professional' : '';
-  const title = titleCandidate && !/@/.test(titleCandidate) ? titleCandidate : inferredTitle;
+  const title = titleCandidate && !/@/.test(titleCandidate) ? titleCandidate : '';
   const locationCandidate = headerLines.find((line) => /,\s*[A-Z]{2}\b/.test(line) && line !== name && !line.includes(name));
   const location = locationCandidate?.replace(email, '').replace(phone, '').replace(website, '').trim() || '';
   const importedExperience = parseExperience(sections.experience);
@@ -1127,7 +1175,7 @@ function importPdfLines(lines) {
   resumeData.exportName = name ? `${name} CV` : 'CV';
   document.querySelector('#exportFilename').removeAttribute('data-edited');
   if (sections.summary?.length) resumeData.summary = sections.summary.join(' ').slice(0, 500);
-  if (sections.skills?.length) resumeData.skills = sections.skills.join(', ').split(',').map((skill) => cleanImportedLine(skill.trim())).filter(Boolean).join(', ');
+  if (sections.skills?.length) resumeData.skills = splitSkills(sections.skills);
   if (importedExperience.length) resumeData.experience = importedExperience;
   if (importedEducation.length) resumeData.education = importedEducation;
   resumeData = normalizeData(resumeData, { strict: false });
