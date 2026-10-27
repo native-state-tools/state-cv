@@ -18,6 +18,8 @@ State CV is a local-first application: your CV content stays on your device. The
 
 - **Plain text stays on this device.** Copy as plain text writes to this browser's clipboard. Download .txt saves a local file. Neither one sends the CV over the network.
 
+- **ATS tips stay in the browser.** The ATS tips panel runs locally in the browser and sends nothing anywhere.
+
 - **Files are checked on this device.** Backup files and PDFs are checked before use, with size limits. A file that fails validation never replaces the current CV. Backups include a schema version.
 
 - **No liability for lost drafts.** Because data lives only in your browser, the operator accepts no responsibility for lost work. Back up what matters to you.
