@@ -72,7 +72,10 @@ button { cursor: pointer; }
 .storage-notice { background: #32233d; border-bottom: 1px solid var(--notice-border); }
 .update-notice { background: #282040; border-bottom: 1px solid var(--notice-border); }
 .storage-notice p, .update-notice p { flex: 1 1 260px; line-height: 1.5; margin: 0; min-width: 0; }
-.storage-notice[hidden], .update-notice[hidden] { display: none; }
+.storage-notice[hidden], .update-notice[hidden], .undo-toast[hidden] { display: none; }
+#backupReminder .button, #undoRemovalButton { max-width: 100%; min-height: 44px; }
+.undo-toast { align-items: center; background: #32233d; border: 1px solid var(--notice-border); border-radius: 8px; bottom: 16px; display: flex; flex-wrap: wrap; gap: 10px; left: 16px; max-width: 420px; padding: 12px 14px; position: fixed; width: calc(100% - 32px); z-index: 35; }
+.undo-toast p { line-height: 1.5; margin: 0; min-width: 0; }
 #applyUpdateButton:disabled { cursor: not-allowed; opacity: .55; }
 #updateBlockedHint { color: var(--muted); flex-basis: 100%; font-size: 12px; }
 .button { border: 1px solid var(--control-border); border-radius: 7px; font-size: 12px; font-weight: 800; letter-spacing: .02em; min-height: 32px; padding: 6px 11px; transition: transform .18s, background .18s; }
@@ -281,6 +284,7 @@ html.page-letter { page: letter; }
     min-height: 36px;
   }
   .mobile-view-nav button[aria-pressed="true"] { background: rgba(185, 255, 102, .12); color: var(--accent); }
+  .undo-toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
   .app-shell[data-mobile-view="preview"] .topbar,
   .app-shell[data-mobile-view="preview"] .editor-panel { display: none; }
   .app-shell[data-mobile-view="preview"] .preview-panel {

@@ -187,6 +187,7 @@ test('app restoreSnapshot preserves the pre-restore CV as an undo snapshot', () 
     updateCompletion() {},
     renderYourDataDialog() {},
     showStorageConflict() {},
+    hideUndoToast() {},
     takeSnapshot: undefined
   });
   vm.runInContext([
@@ -244,7 +245,9 @@ test('app loadData quarantines malformed JSON and a successful forced save keeps
     showDamagedNotice() {},
     showStorageConflict() {},
     showStorageUnavailableNotice() {},
-    requestStoragePersistence() {}
+    requestStoragePersistence() {},
+    noteBackupReminderEdit() {},
+    updateBackupReminderNotice() {}
   });
   vm.runInContext([
     appSource.slice(toStorableStart, toStorableEnd),

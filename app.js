@@ -47,6 +47,12 @@ let persistenceRequestStarted = false;
 let lastSnapshotAt = Date.now();
 let resumeData = loadData();
 let saveTimer;
+const BACKUP_REMINDER_KEY = 'state-cv-backup-reminder-v1';
+const BACKUP_REMINDER_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+let backupReminder = readBackupReminder();
+let backupReminderDismissed = false;
+let pendingEntryRemoval = null;
+let undoToastTimer = null;
 
 try {
   const storedPersistenceResult = stateStorage.getItem('state-cv-persistence-v1');
@@ -242,6 +248,7 @@ function saveData({ force = false } = {}) {
     }
     setStatus('saved', 'Saved locally');
     requestStoragePersistence();
+    noteBackupReminderEdit();
     return true;
   } catch (error) {
     if (error.code === 'snapshot') {
@@ -257,6 +264,7 @@ function saveData({ force = false } = {}) {
     storageWriteFailed = true;
     showStorageUnavailableNotice('Browser storage could not be written. Changes are not being saved.');
     setStatus('error', 'Not saving: storage unavailable');
+    updateBackupReminderNotice();
     console.error('State CV could not save locally.', error);
     return false;
   }
@@ -439,11 +447,163 @@ function downloadDamagedData() {
   downloadFile(new Blob([raw], { type: 'application/json' }), 'state-cv-damaged-data.json');
 }
 
+function finiteReminderNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function readBackupReminder() {
+  try {
+    const raw = localStorage.getItem(BACKUP_REMINDER_KEY);
+    if (!raw) return { lastBackupAt: 0, editsSinceBackup: 0, snoozeUntil: 0 };
+    const parsed = JSON.parse(raw);
+    const source = parsed && typeof parsed === 'object' ? parsed : {};
+    return {
+      lastBackupAt: finiteReminderNumber(source.lastBackupAt),
+      editsSinceBackup: finiteReminderNumber(source.editsSinceBackup),
+      snoozeUntil: finiteReminderNumber(source.snoozeUntil)
+    };
+  } catch (error) {
+    console.warn('State CV could not read the backup reminder.', error);
+    return { lastBackupAt: 0, editsSinceBackup: 0, snoozeUntil: 0 };
+  }
+}
+
+function writeBackupReminder(state) {
+  try {
+    localStorage.setItem(BACKUP_REMINDER_KEY, JSON.stringify({
+      lastBackupAt: finiteReminderNumber(state && state.lastBackupAt),
+      editsSinceBackup: finiteReminderNumber(state && state.editsSinceBackup),
+      snoozeUntil: finiteReminderNumber(state && state.snoozeUntil)
+    }));
+  } catch (error) {
+    console.warn('State CV could not save the backup reminder.', error);
+  }
+}
+
+function noteBackupReminderEdit() {
+  try {
+    backupReminder.editsSinceBackup = finiteReminderNumber(backupReminder.editsSinceBackup) + 1;
+    writeBackupReminder(backupReminder);
+    updateBackupReminderNotice();
+  } catch (error) {
+    console.warn('State CV could not update the backup reminder.', error);
+  }
+}
+
+function updateBackupReminderNotice() {
+  if (backupReminderDismissed || storageDamaged || storageLoadFailed || storageWriteFailed ||
+      !shouldRemindBackup(backupReminder, Date.now())) {
+    hideBackupReminder();
+    return;
+  }
+  const notice = document.querySelector('#backupReminder');
+  if (!notice) return;
+  notice.hidden = false;
+  notice.inert = false;
+  updateStickyOffsets();
+}
+
+function hideBackupReminder() {
+  const notice = document.querySelector('#backupReminder');
+  if (!notice || notice.hidden) return;
+  if (notice.contains(document.activeElement)) {
+    const focusTarget = document.querySelector('#appShell').inert ? '#continueButton' : '#brandHome';
+    document.querySelector(focusTarget).focus();
+  }
+  notice.inert = true;
+  notice.hidden = true;
+  updateStickyOffsets();
+}
+
+function isBlankPlaceholder(listName, record) {
+  if (!record || typeof record !== 'object') return false;
+  const keys = listName === 'experience'
+    ? ['role', 'company', 'dates', 'highlights']
+    : ['degree', 'school', 'dates'];
+  return keys.every((key) => record[key] === '');
+}
+
+function showUndoToast(listName) {
+  const toast = document.querySelector('#undoToast');
+  const message = document.querySelector('#undoToastMessage');
+  if (!toast || !message) return;
+  message.textContent = listName === 'education' ? 'Education entry removed' : 'Experience entry removed';
+  clearTimeout(undoToastTimer);
+  toast.hidden = false;
+  toast.inert = false;
+  undoToastTimer = setTimeout(hideUndoToast, 8000);
+}
+
+function dismissUndoToast({ restoreFocus = false } = {}) {
+  clearTimeout(undoToastTimer);
+  undoToastTimer = null;
+  const toast = document.querySelector('#undoToast');
+  if (!toast) return;
+  const returnFocus = restoreFocus && toast.contains(document.activeElement);
+  toast.inert = true;
+  toast.hidden = true;
+  if (returnFocus) {
+    const focusTarget = document.querySelector('#appShell').inert ? '#continueButton' : '#brandHome';
+    document.querySelector(focusTarget).focus();
+  }
+}
+
+function hideUndoToast() {
+  pendingEntryRemoval = null;
+  dismissUndoToast({ restoreFocus: true });
+}
+
+function undoEntryRemoval() {
+  const pending = pendingEntryRemoval;
+  const items = pending && resumeData[pending.list];
+  if (!pending || !Array.isArray(items)) return;
+  const replacePlaceholder = pending.placeholderAdded && items.length === 1 && isBlankPlaceholder(pending.list, items[0]);
+  const maxEntries = pending.list === 'experience' ? MAX_EXPERIENCE_ENTRIES : MAX_EDUCATION_ENTRIES;
+  if (!replacePlaceholder && items.length >= maxEntries) {
+    setStatus('error', `Limit of ${maxEntries} entries reached`);
+    return;
+  }
+  pendingEntryRemoval = null;
+  dismissUndoToast();
+  let restoredIndex = 0;
+  if (replacePlaceholder) {
+    items[0] = structuredClone(pending.item);
+  } else {
+    restoredIndex = Math.min(Math.max(pending.index, 0), items.length);
+    items.splice(restoredIndex, 0, structuredClone(pending.item));
+  }
+  renderRepeaters();
+  updatePreview();
+  updateCompletion();
+  scheduleSave();
+  const listId = pending.list === 'experience' ? 'experienceList' : 'educationList';
+  const entry = document.querySelectorAll(`#${listId} .repeat-item`)[restoredIndex];
+  const field = entry ? entry.querySelector('input, textarea') : null;
+  if (field) field.focus();
+}
+
+function shouldRemindBackup(state, now) {
+  const source = state && typeof state === 'object' ? state : {};
+  const asNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  const editsSinceBackup = asNumber(source.editsSinceBackup);
+  const lastBackupAt = asNumber(source.lastBackupAt);
+  const snoozeUntil = asNumber(source.snoozeUntil);
+  const currentTime = asNumber(now);
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const noBackupYet = lastBackupAt <= 0;
+  const backupIsOld = lastBackupAt > 0 && currentTime - lastBackupAt > weekMs;
+  return editsSinceBackup >= 20 && (noBackupYet || backupIsOld) && currentTime >= snoozeUntil;
+}
+
 function downloadBackup() {
   downloadFile(
     new Blob([JSON.stringify(toStorable(), null, 2)], { type: 'application/json' }),
     `${safeFilename(document.querySelector('#exportFilename').value || resumeData.basics.name || 'CV')}.json`
   );
+  backupReminder.lastBackupAt = Date.now();
+  backupReminder.editsSinceBackup = 0;
+  writeBackupReminder(backupReminder);
+  updateBackupReminderNotice();
 }
 
 function downloadFile(blob, filename) {
@@ -585,6 +745,7 @@ function restoreSnapshot(index, normalizedData) {
       }
     }
     cancelScheduledSave();
+    hideUndoToast();
     resumeData = structuredClone(normalizedData);
     document.querySelector('#exportFilename').removeAttribute('data-edited');
     renderFields(); updatePreview(); updateCompletion();
@@ -648,6 +809,15 @@ function clearAllData() {
     damagedCopyStored = false;
     persistenceResult = 'unknown';
     persistenceRequestStarted = false;
+    backupReminder = { lastBackupAt: 0, editsSinceBackup: 0, snoozeUntil: 0 };
+    backupReminderDismissed = false;
+    try {
+      localStorage.removeItem(BACKUP_REMINDER_KEY);
+    } catch (error) {
+      console.warn('State CV could not clear the backup reminder.', error);
+    }
+    hideUndoToast();
+    hideBackupReminder();
     renderFields(); updatePreview(); updateCompletion(); updateLaunchScreen();
     hideStorageNotice();
     setStatus('saved', 'No saved draft');
@@ -696,6 +866,7 @@ function reloadLatestData() {
     storageDamaged = false;
     storageWriteFailed = false;
     storageConflict = false;
+    hideUndoToast();
     renderFields(); updatePreview(); updateCompletion(); updateLaunchScreen();
     if (damagedRaw) {
       showDamagedNotice('An earlier damaged data copy remains preserved separately. Download it if you need the raw file.');
@@ -773,9 +944,20 @@ function renderRepeater(listId, templateId, items, createBlankRecord) {
     removeButton.setAttribute('aria-label', `Remove ${entryType} entry ${index + 1}`);
     removeButton.title = `Remove ${entryType} entry ${index + 1}`;
     removeButton.addEventListener('click', () => {
+      const removed = {
+        item: structuredClone(item),
+        index,
+        list: entryType,
+        placeholderAdded: false
+      };
       items.splice(index, 1);
-      if (!items.length) items.push(createBlankRecord());
+      if (!items.length) {
+        items.push(createBlankRecord());
+        removed.placeholderAdded = true;
+      }
+      pendingEntryRemoval = removed;
       renderRepeaters(); updatePreview(); updateCompletion(); scheduleSave();
+      showUndoToast(entryType);
     });
     list.appendChild(node);
   });
@@ -947,6 +1129,7 @@ function startNewCv({ confirmReplacement = true } = {}) {
     console.error('State CV could not create a snapshot before starting a new CV.', error);
     return;
   }
+  hideUndoToast();
   resumeData = structuredClone(defaultData);
   document.querySelector('#exportFilename').removeAttribute('data-edited');
   renderFields(); updatePreview(); updateCompletion();
@@ -1172,6 +1355,7 @@ function detectContact(text) {
 
 function importPdfLines(lines) {
   cancelScheduledSave();
+  hideUndoToast();
   const text = lines.join('\n');
   const sections = splitPdfSections(lines);
   const { email, phone, website } = detectContact(text);
@@ -1793,6 +1977,7 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
       const normalized = normalizeData(imported, { strict: true });
       cancelScheduledSave();
       takeSnapshot();
+      hideUndoToast();
       resumeData = normalized;
       document.querySelector('#exportFilename').removeAttribute('data-edited');
       renderFields(); updatePreview(); updateCompletion();
@@ -1821,6 +2006,20 @@ document.querySelector('#reloadLatestButton').addEventListener('click', reloadLa
 document.querySelector('#keepMineButton').addEventListener('click', keepMine);
 document.querySelector('#downloadDamagedButton').addEventListener('click', downloadDamagedData);
 document.querySelector('#dismissStorageNoticeButton').addEventListener('click', () => hideStorageNotice({ dismissed: true }));
+document.querySelector('#undoRemovalButton').addEventListener('click', undoEntryRemoval);
+document.querySelector('#backupReminderDownload').addEventListener('click', () => {
+  downloadBackup();
+  hideBackupReminder();
+});
+document.querySelector('#backupReminderLater').addEventListener('click', () => {
+  backupReminderDismissed = true;
+  hideBackupReminder();
+});
+document.querySelector('#backupReminderSnooze').addEventListener('click', () => {
+  backupReminder.snoozeUntil = Date.now() + BACKUP_REMINDER_WEEK_MS;
+  writeBackupReminder(backupReminder);
+  hideBackupReminder();
+});
 
 renderFields();
 updatePreview();
@@ -1836,6 +2035,7 @@ else if (storageLoadFailed) {
   showStorageUnavailableNotice();
   setImportStatus('Saved data could not be loaded; saving is blocked', true);
 }
+updateBackupReminderNotice();
 if (persistenceResult !== 'granted' && hasSavedDraft()) requestStoragePersistence();
 document.querySelector('#brandHome').addEventListener('click', (event) => { event.preventDefault(); openLaunchScreen(); });
 document.querySelector('#continueButton').addEventListener('click', closeLaunchScreen);

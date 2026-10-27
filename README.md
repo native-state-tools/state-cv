@@ -33,6 +33,7 @@ npm run test:e2e
 - Native selectable-text PDF export in Letter or A4, with Compact, Standard, or Large text, clickable email and website links, and a warning when a character cannot be drawn
 - Copy or download the same CV as plain text on this device
 - ATS tips panel runs locally in the browser and sends nothing anywhere
+- Backup reminders are stored only in this browser and contain no CV content
 - Responsive editor, full-screen preview, and an Edit | Preview | Export bottom bar on screens narrower than 1024px
 - No account or external service required
 
