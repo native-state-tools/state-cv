@@ -697,9 +697,16 @@ test('Text size Large increases the preview bullet size', async ({ page, isMobil
   await openStoredCv(page, filledCv);
   const preview = page.locator('#resumePreview');
   await expect(preview).toHaveClass(/preview-text-standard/);
+  const summary = preview.locator('p').first();
   if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const bullet = preview.locator('.entry-bullets li').first();
   const standardSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
+  if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.locator('.more-menu summary').click();
+  await page.locator('#textSize').selectOption('compact');
+  await expect(preview).toHaveClass(/preview-text-compact/);
+  if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const compactSummary = await summary.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.locator('.more-menu summary').click();
   await page.locator('#textSize').selectOption('large');
@@ -707,7 +714,9 @@ test('Text size Large increases the preview bullet size', async ({ page, isMobil
   await expect(preview).not.toHaveClass(/preview-text-standard/);
   if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const largeSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
+  const largeSummary = await summary.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   expect(largeSize).toBeGreaterThan(standardSize);
+  expect(largeSummary).toBeGreaterThan(compactSummary);
 });
 
 test('Copy as plain text shows a local status', async ({ page, context }) => {
@@ -989,6 +998,7 @@ test('About and privacy page loads, links back, and does not overflow', async ({
 
   await page.getByRole('link', { name: 'About and privacy' }).click();
   await expect(page).toHaveURL(/\/about\.html$/);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/svg\+xml/);
   await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
   expect(await visibleLevelOneHeadings(page)).toBe(1);
   for (const name of ['What is stored', 'Where it is stored', 'What is never sent', 'How to remove it', 'Backups']) {
