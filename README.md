@@ -1,8 +1,20 @@
 # State CV
 
-Live version: https://native-state-tools.github.io/state-cv/
+State CV is a local-first ATS CV builder by Native State Tools. Your CV stays in this browser.
 
-A local-first ATS-compatible CV builder built with HTML, CSS, and JavaScript. Part of **Native State Tools**.
+[Open the app](https://native-state-tools.github.io/state-cv/) · [About and privacy](https://native-state-tools.github.io/state-cv/about.html)
+
+![State CV editor and preview after importing a CV](docs/screenshot.png)
+
+## How to use
+
+1. Start a new CV, or import a PDF or a JSON backup. PDF import is on the start screen and in the editor. JSON backups use **Import**.
+2. Edit contact details, summary, experience, education, and skills. The preview updates as you type, and edits save in this browser.
+3. Check the ATS tips above the form.
+4. Choose **Export PDF**, or open **More** and use **Copy as plain text** or **Download .txt**.
+5. Download a backup from **More** (**Backup (JSON)**) or from **Your data** (**Download backup**).
+
+If a CV is already saved, importing a PDF or JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under Recent snapshots.
 
 ## Run
 
@@ -27,14 +39,16 @@ npm run test:e2e
 
 - Live ATS-friendly CV preview
 - Local autosave with revision checks for multi-tab edits and up to five recent recovery snapshots
+- Undo brings back a removed experience or education entry
 - A **Your data** dialog with the last-save time, approximate storage size, persistence request result and live browser status, snapshot restore, backup download, damaged-data download, and two-step clear
 - JSON import and export for backup (imports up to 2 MB); backups are versioned and validated before use
 - PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
+- If a CV is already saved, importing a PDF or JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under Recent snapshots
 - Native selectable-text PDF export in Letter or A4, with Compact, Standard, or Large text, clickable email and website links, and a warning when a character cannot be drawn
 - Copy or download the same CV as plain text on this device
 - ATS tips panel runs locally in the browser and sends nothing anywhere
 - Backup reminders are stored only in this browser and contain no CV content
-- About and privacy page explains what stays in this browser and how to remove it
+- About and privacy page explains what stays in this browser and how to remove it. The same policy is in [PRIVACY.md](PRIVACY.md)
 - Responsive editor, full-screen preview, and an Edit | Preview | Export bottom bar on screens narrower than 1024px
 - No account or external service required
 
