@@ -1,7 +1,8 @@
-const CACHE_NAME = 'state-cv-cache-v19';
+const CACHE_NAME = 'state-cv-cache-v20';
 const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',
+  './about.html',
   './styles.css',
   './storage.js',
   './app.js',
@@ -51,9 +52,11 @@ self.addEventListener('fetch', (event) => {
   const precachedAsset = PRECACHE_URLS.find((path) => new URL(path, self.location).pathname === url.pathname);
 
   if (request.mode === 'navigate') {
-    event.respondWith(caches.open(CACHE_NAME).then((cache) =>
-      cache.match(new URL('./index.html', self.location).href)
-    ).then((cached) => cached || fetch(request)));
+    const navigatedPage = PRECACHE_URLS.find((path) =>
+      path.endsWith('.html') && new URL(path, self.location).pathname === url.pathname);
+    const pageUrl = new URL(navigatedPage || './index.html', self.location).href;
+    event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(pageUrl))
+      .then((cached) => cached || fetch(request)));
     return;
   }
 

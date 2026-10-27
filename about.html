@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; worker-src 'self' blob:; connect-src 'self';" />
+  <meta name="description" content="What State CV stores on this device, and how to remove it." />
+  <title>About and privacy | State CV</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="about-page">
+    <p class="eyebrow">Local-first <span class="eyebrow-rule"></span> On this device</p>
+    <h1>About and privacy</h1>
+    <p>State CV is a local-first application: your CV content stays on your device. The app may download its own static files and updates from the same origin that hosts it.</p>
+
+    <h2>What is stored</h2>
+    <p>State CV keeps the following values in this browser.</p>
+    <ul>
+      <li><code>state-cv-data-v1</code> holds your CV draft. It includes a revision for detecting conflicting edits in another tab.</li>
+      <li><code>state-cv-snapshots-v1</code> holds up to five recent local snapshots.</li>
+      <li><code>state-cv-damaged-v1</code> holds an unchanged copy of saved data that could not be read. That copy is not removed automatically. Saving stays blocked until you import a JSON backup or explicitly start a new CV.</li>
+      <li><code>state-cv-persistence-v1</code> holds the result of the browser persistence request: granted, not granted, or unavailable.</li>
+      <li><code>state-cv-backup-reminder-v1</code> holds backup reminder counters only. It contains no CV content.</li>
+    </ul>
+
+    <h2>Where it is stored</h2>
+    <p>Only in this browser on this device.</p>
+
+    <h2>What is never sent</h2>
+    <p>Your CV content, keystrokes, and files are processed entirely in your browser. No CV data, identifiers, or usage information is ever sent to any server. There is no account, no analytics, and no tracking.</p>
+    <p>Copy as plain text writes to this browser's clipboard. Download .txt saves a local file. Neither one sends the CV over the network. ATS tips run locally in the browser and send nothing anywhere. App updates are downloaded from the same origin and contain no CV content, identifiers, or usage data.</p>
+
+    <h2>How to remove it</h2>
+    <p>Open Your data and choose Clear all data. That clears the draft, snapshots, damaged copy, persistence result, and backup reminder from this browser. You can also remove them by clearing this site's data in the browser.</p>
+
+    <h2>Backups</h2>
+    <p>Backups are your responsibility. Because data lives only in your browser, back up what matters to you. A persistence grant does not replace a JSON backup.</p>
+
+    <p><a class="about-link" href="./index.html">Back to State CV</a></p>
+  </main>
+</body>
+</html>

@@ -43,6 +43,8 @@ button { cursor: pointer; }
 .launch-card small { color: #aaa2c5; font-size: 10px; line-height: 1.4; margin-top: 5px; }
 .launch-card-arrow { color: var(--accent); font-size: 20px; margin-left: auto; }
 .launch-footnote { color: var(--muted); font-size: 9px; margin: 32px 0 0; text-transform: uppercase; }
+.about-link { color: var(--accent); font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 14px; font-weight: 700; text-decoration: underline; text-transform: none; text-underline-offset: 3px; }
+.launch-footnote .about-link { display: block; margin: 10px 0 0; width: fit-content; }
 .launch-glow { border: 1px solid rgba(185, 255, 102, .12); border-radius: 50%; height: 500px; position: absolute; width: 500px; }
 .launch-glow-one { right: -170px; top: -160px; }
 .launch-glow-two { bottom: -370px; left: -230px; }
@@ -331,7 +333,8 @@ html.page-letter { page: letter; }
 }
 @media (pointer: coarse) {
   button, select, input, textarea { min-height: 44px; }
-  .button, .paper-size-control, .filename-control, .icon-button, .remove-item, .mobile-view-nav button { min-height: 44px; }
+  .button, .paper-size-control, .filename-control, .icon-button, .remove-item, .mobile-view-nav button, .about-link { min-height: 44px; }
+  .about-link { align-items: center; display: inline-flex; }
   .icon-button, .remove-item { min-width: 44px; }
   .repeat-item { padding-top: 62px; }
 }
@@ -343,3 +346,11 @@ html.page-letter { page: letter; }
     transition-duration: .01ms !important;
   }
 }
+.about-page { margin: 0 auto; max-width: 720px; overflow-wrap: anywhere; padding: 48px 22px 72px; }
+.about-page h1 { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; font-size: clamp(36px, 8vw, 56px); line-height: 1.05; margin: 0 0 18px; }
+.about-page h2 { font-size: 18px; margin: 32px 0 10px; }
+.about-page p, .about-page li { font-size: 16px; line-height: 1.55; }
+.about-page ul { margin: 0; padding-left: 1.2em; }
+.about-page li { margin: 8px 0; }
+.about-page code { color: var(--accent); font-family: Consolas, 'Courier New', monospace; }
+.about-page .about-link { display: inline-flex; margin-top: 28px; min-height: 44px; align-items: center; }
