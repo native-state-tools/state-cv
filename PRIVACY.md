@@ -14,13 +14,13 @@ State CV is a local-first application: your CV content stays on your device. The
 
 - **Browser persistence is best-effort.** After the first successful save, State CV calls the browser's persistent-storage API when available and records whether the request was granted, not granted, or unavailable. If it was not granted, the request is retried on later page loads. The **Your data** dialog also reads the browser's current persistence status when available. A grant does not replace a JSON backup. Browser storage behavior can differ when opening `index.html` directly from the file system; it should not be assumed to match the hosted site.
 
-- **You control local copies.** The **Your data** dialog can download a backup or preserved damaged data, restore a snapshot, and clear the draft, snapshots, damaged copy, and persistence result from this browser.
+- **You control local copies.** The **Your data** dialog can download a backup or preserved damaged data, restore a snapshot, and clear the draft, snapshots, damaged copy, persistence result, and backup reminder from this browser. Clearing this site's data in the browser removes those stored values too.
 
 - **Plain text stays on this device.** Copy as plain text writes to this browser's clipboard. Download .txt saves a local file. Neither one sends the CV over the network.
 
 - **ATS tips stay in the browser.** The ATS tips panel runs locally in the browser and sends nothing anywhere.
 
-- **Backup reminders.** Backup reminders are stored only in this browser and contain no CV content.
+- **Backup reminders.** Backup reminders are stored only in this browser under `state-cv-backup-reminder-v1` and contain no CV content.
 
 - **Files are checked on this device.** Backup files and PDFs are checked before use, with size limits. A file that fails validation never replaces the current CV. Backups include a schema version.
 

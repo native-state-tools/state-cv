@@ -34,6 +34,7 @@ npm run test:e2e
 - Copy or download the same CV as plain text on this device
 - ATS tips panel runs locally in the browser and sends nothing anywhere
 - Backup reminders are stored only in this browser and contain no CV content
+- About and privacy page explains what stays in this browser and how to remove it
 - Responsive editor, full-screen preview, and an Edit | Preview | Export bottom bar on screens narrower than 1024px
 - No account or external service required
 

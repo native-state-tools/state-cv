@@ -77,8 +77,10 @@ function checkSyntax(files) {
 }
 
 function lintSources() {
-  const htmlPath = path.join(root, 'index.html');
-  const html = fs.readFileSync(htmlPath, 'utf8');
+  const htmlFiles = ['index.html', 'about.html'].map((file) => {
+    const htmlPath = path.join(root, file);
+    return [htmlPath, fs.readFileSync(htmlPath, 'utf8')];
+  });
   const scriptPaths = ['app.js', 'storage.js', 'sw.js'].map((file) => path.join(root, file));
   const scriptSources = scriptPaths.map((file) => [file, fs.readFileSync(file, 'utf8')]);
   const appAndStorage = scriptSources.filter(([file]) => ['app.js', 'storage.js'].includes(path.basename(file)));
@@ -86,8 +88,8 @@ function lintSources() {
   const findings = [];
   for (const [ruleName, pattern, description] of rules) {
     let targets = scriptSources;
-    if (ruleName === 'inline-style-attribute' || ruleName === 'module-script') targets = [[htmlPath, html]];
-    else if (ruleName === 'external-runtime-target') targets = [[htmlPath, html], ...scriptSources];
+    if (ruleName === 'inline-style-attribute' || ruleName === 'module-script') targets = htmlFiles;
+    else if (ruleName === 'external-runtime-target') targets = [...htmlFiles, ...scriptSources];
     else if (ruleName === 'html-string-inline-style') targets = appAndStorage.concat(scriptSources.filter(([file]) => path.basename(file) === 'sw.js'));
     else if (['xmlhttprequest', 'websocket', 'import-scripts', 'send-beacon'].includes(ruleName)) targets = appAndStorage;
     for (const [file, source] of targets) {

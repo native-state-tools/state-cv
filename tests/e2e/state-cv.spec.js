@@ -69,6 +69,29 @@ async function savedName(page) {
   });
 }
 
+async function visibleLevelOneHeadings(page) {
+  const headings = page.getByRole('heading', { level: 1 });
+  const count = await headings.count();
+  let visible = 0;
+  for (let index = 0; index < count; index += 1) {
+    const heading = headings.nth(index);
+    if (!(await heading.isVisible())) continue;
+    const shown = await heading.evaluate((element) => {
+      if (element.closest('[inert]')) return false;
+      let node = element;
+      while (node) {
+        const style = getComputedStyle(node);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+        node = node.parentElement;
+      }
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    if (shown) visible += 1;
+  }
+  return visible;
+}
+
 const filledCv = {
   schemaVersion: 1,
   basics: {
@@ -414,10 +437,9 @@ test('200 percent root text setting keeps phone layout and controls in bounds', 
 
 test('active view exposes one h1 and More opens and closes by keyboard', async ({ page }) => {
   await openApp(page);
-  const activeViewHeading = page.locator('#launchScreen:not(.is-hidden) h1, #appShell:not([inert]) h1');
-  await expect(activeViewHeading).toHaveCount(1);
+  expect(await visibleLevelOneHeadings(page)).toBe(1);
   await enterEditor(page);
-  await expect(activeViewHeading).toHaveCount(1);
+  expect(await visibleLevelOneHeadings(page)).toBe(1);
   const more = page.locator('.more-menu summary');
   await expect(page.locator('#moreMenuContent')).toBeHidden();
   await more.focus();
@@ -426,6 +448,9 @@ test('active view exposes one h1 and More opens and closes by keyboard', async (
   await page.keyboard.press('Escape');
   await expect(page.locator('#moreMenuContent')).toBeHidden();
   await expect(more).toBeFocused();
+  await page.goto('/about.html');
+  await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
+  expect(await visibleLevelOneHeadings(page)).toBe(1);
 });
 
 test('Your data dialog traps focus, closes with Escape, and restores its opener', async ({ page }) => {
@@ -854,6 +879,153 @@ test('Backup reminder shows after many edits and stays hidden after Remind me in
   await page.reload();
   await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
   await expect(notice).toBeHidden();
+});
+
+async function controllingCacheName(page) {
+  return page.evaluate(() => new Promise((resolve) => {
+    const worker = navigator.serviceWorker.controller;
+    if (!worker || typeof MessageChannel !== 'function') {
+      resolve(null);
+      return;
+    }
+    const channel = new MessageChannel();
+    const timeout = setTimeout(() => resolve('timeout'), 2000);
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timeout);
+      resolve(event.data);
+    };
+    try {
+      worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+    } catch (error) {
+      clearTimeout(timeout);
+      resolve(String(error));
+    }
+  }));
+}
+
+test('Update now flow reloads onto the new cache name', async ({ page }) => {
+  const swSource = await fs.readFile(path.join(__dirname, '../../sw.js'), 'utf8');
+  const currentCache = swSource.match(/const CACHE_NAME = '([^']+)';/)?.[1];
+  expect(currentCache).toMatch(/^state-cv-cache-v/);
+  const previousCache = `${currentCache}-previous`;
+  const previousSource = swSource.replace(
+    /const CACHE_NAME = '[^']+';/,
+    `const CACHE_NAME = '${previousCache}';`
+  );
+  expect(previousSource).not.toBe(swSource);
+
+  // The update check refetches sw.js outside Playwright's router, so the first
+  // install is a different cache name and that refetch is the new version.
+  let routedInstall = false;
+  await page.context().route(/sw\.js(?:\?.*)?$/, async (route) => {
+    if (!routedInstall) {
+      routedInstall = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/javascript; charset=utf-8',
+        body: previousSource,
+        headers: {
+          'cache-control': 'no-store',
+          'service-worker-allowed': '/'
+        }
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await openApp(page);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), { timeout: 15000 }).toBe(true);
+  await expect.poll(() => controllingCacheName(page), { timeout: 15000 }).toBe(previousCache);
+
+  await page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) throw new Error('No service worker registration');
+    await registration.update();
+  });
+
+  const notice = page.locator('#updateNotice');
+  await expect(notice).toBeVisible({ timeout: 15000 });
+  await expect(notice).toContainText('A new version of State CV is ready.');
+  const updateButton = page.getByRole('button', { name: 'Update now' });
+  await expect(updateButton).toBeEnabled();
+  await updateButton.click();
+  await expect.poll(async () => {
+    try {
+      return await page.evaluate(() => performance.getEntriesByType('navigation')[0]?.type);
+    } catch (error) {
+      if (!/destroyed|navigation/i.test(String(error))) throw error;
+      return null;
+    }
+  }, { timeout: 15000 }).toBe('reload');
+  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+  await expect.poll(() => controllingCacheName(page), { timeout: 15000 }).toBe(currentCache);
+});
+
+test('damaged data blocks normal save', async ({ page }) => {
+  const raw = '{"broken":';
+  await page.addInitScript((damaged) => localStorage.setItem('state-cv-data-v1', damaged), raw);
+  await openApp(page);
+  await expect(page.locator('#saveStatus')).toContainText('Not saving: damaged data');
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Should not persist');
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => localStorage.getItem('state-cv-data-v1'))).toBe(raw);
+  const status = page.locator('#saveStatus');
+  await expect(status).toContainText(/Not saving|Saved data not replaced/);
+  await expect(status).not.toContainText('Saved locally');
+});
+
+test('About and privacy page loads, links back, and does not overflow', async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), { timeout: 15000 }).toBe(true);
+  const launchDimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth
+  }));
+  expect(launchDimensions.scrollWidth).toBeLessThanOrEqual(launchDimensions.innerWidth);
+
+  await page.getByRole('link', { name: 'About and privacy' }).click();
+  await expect(page).toHaveURL(/\/about\.html$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
+  expect(await visibleLevelOneHeadings(page)).toBe(1);
+  for (const name of ['What is stored', 'Where it is stored', 'What is never sent', 'How to remove it', 'Backups']) {
+    await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
+  }
+  for (const key of [
+    'state-cv-data-v1',
+    'state-cv-snapshots-v1',
+    'state-cv-damaged-v1',
+    'state-cv-persistence-v1',
+    'state-cv-backup-reminder-v1'
+  ]) {
+    await expect(page.getByText(key, { exact: true })).toBeVisible();
+  }
+  await expect(page.getByText('Only in this browser on this device.')).toBeVisible();
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth);
+
+  await page.context().setOffline(true);
+  try {
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+
+  await page.getByRole('link', { name: 'Back to State CV' }).click();
+  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+  await enterEditor(page);
+  await openDataDialog(page);
+  await page.getByRole('dialog', { name: 'Your data' }).getByRole('link', { name: 'About and privacy' }).click();
+  await expect(page).toHaveURL(/\/about\.html$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
 });
 
 test('Backup reminder Download backup starts a JSON download and resets the counter', async ({ page }) => {
