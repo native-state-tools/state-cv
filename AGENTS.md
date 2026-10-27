@@ -19,7 +19,7 @@
 - **CSP is a meta tag** (GitHub Pages cannot send headers). Preserve and tighten it. Keep scripts, styles, workers, fonts, images and connections local.
 - **Classic scripts only.** No ES modules. `index.html` must keep working when opened from `file://`. New script files load in order from `index.html`.
 - **No dynamic HTML.** Build UI with DOM calls (`createElement`, `textContent`). Never use `innerHTML`, `insertAdjacentHTML` or `outerHTML` with dynamic data. No inline `style` attributes and no `setAttribute('style')`; CSSOM (`el.style.x`, `style.setProperty`) is fine.
-- **Storage format is fixed.** Do not change storage keys or the data format without a migration. Keys: `state-cv-data-v1`, `state-cv-snapshots-v1`, `state-cv-damaged-v1`, `state-cv-persistence-v1`. Keep JSON backup and restore human-readable.
+- **Storage format is fixed.** Do not change storage keys or the data format without a migration. Keys: `state-cv-data-v1`, `state-cv-snapshots-v1`, `state-cv-damaged-v1`, `state-cv-persistence-v1`, `state-cv-backup-reminder-v1`. Keep JSON backup and restore human-readable.
 - **Service worker:** bump `CACHE_NAME` in `sw.js` on ANY change to a precached file, and add new precached files to its list.
 - **Approval required** before editing `vendor/`, adding any dependency, or bundling any new asset (fonts, libraries). The only dev dependency is `@playwright/test`.
 - Validate imported files and keep the existing size, page and parsing limits.

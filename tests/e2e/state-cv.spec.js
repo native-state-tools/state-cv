@@ -226,6 +226,7 @@ test('damaged data can be downloaded and recovered with a JSON backup', async ({
   expect(downloadPath).not.toBeNull();
   expect(await fs.readFile(downloadPath, 'utf8')).toBe(raw);
 
+  page.once('dialog', (dialog) => dialog.accept());
   await page.locator('#importInput').setInputFiles({
     name: 'recovery.json',
     mimeType: 'application/json',
@@ -1169,7 +1170,41 @@ test('Import fixture replaces old values', async ({ page }) => {
   await page.getByLabel('Location').fill('566');
   await expect(page.getByLabel('Professional title')).toHaveValue('5151');
   await expect(page.getByLabel('Location')).toHaveValue('566');
+  page.once('dialog', (dialog) => dialog.accept());
   await importPdfFixture(page, 'cv1-classic-single-column.pdf');
   await expect(page.getByLabel('Professional title')).toHaveValue('');
   await expect(page.getByLabel('Location')).toHaveValue('Austin, TX');
+});
+
+test('Import confirm cancel keeps current CV', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Keep Me');
+  await expect.poll(() => savedName(page)).toBe('Keep Me');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
+  await expect(page.locator('#saveStatus')).toContainText('Import cancelled');
+  await expect(page.getByLabel('Full name')).toHaveValue('Keep Me');
+});
+
+test('Import confirm accept replaces CV', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Keep Me');
+  await expect.poll(() => savedName(page)).toBe('Keep Me');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
+  await expect(page.getByLabel('Full name')).toHaveValue('Jordan Ellis');
+});
+
+test('Import confirm not shown without a draft', async ({ page }) => {
+  await openApp(page);
+  let sawDialog = false;
+  page.on('dialog', (dialog) => {
+    sawDialog = true;
+    dialog.dismiss();
+  });
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
+  await expect(page.getByLabel('Full name')).toHaveValue('Jordan Ellis');
+  expect(sawDialog).toBe(false);
 });

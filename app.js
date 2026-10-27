@@ -1965,6 +1965,12 @@ async function handlePdfImport(file) {
   try {
     const lines = await extractPdfText(file);
     if (!lines.length) throw new ImportError('This PDF has no selectable text. Try an OCR-enabled PDF.');
+    if (hasSavedDraft() && !window.confirm('Importing will replace your current CV. A copy is kept in Your data > Recent snapshots. Continue?')) {
+      setImportStatus('Import cancelled');
+      document.querySelector('#pdfInput').value = '';
+      document.querySelector('#importInput').value = '';
+      return;
+    }
     takeSnapshot();
     const imported = importPdfLines(lines);
     if (!imported.saved) {
@@ -2068,6 +2074,11 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
     }
     try {
       const normalized = normalizeData(imported, { strict: true });
+      if (hasSavedDraft() && !window.confirm('Importing will replace your current CV. A copy is kept in Your data > Recent snapshots. Continue?')) {
+        setImportStatus('Import cancelled');
+        event.target.value = '';
+        return;
+      }
       cancelScheduledSave();
       takeSnapshot();
       hideUndoToast();
