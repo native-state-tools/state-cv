@@ -863,6 +863,21 @@ function updateCompletion() {
   document.querySelector('#completionLabel').textContent = percent === 100 ? 'Ready to send' : percent >= 70 ? 'Looking strong' : 'Add your details';
   const progress = Math.min(100, Math.round(percent / 25) * 25);
   document.querySelector('#completionRing').className = `completion-ring progress-${progress}`;
+  renderAtsTips();
+}
+
+function renderAtsTips() {
+  const tips = getAtsTips(resumeData);
+  const count = document.querySelector('#atsTipsCount');
+  if (count) count.textContent = `(${tips.length})`;
+  const list = document.querySelector('#atsTipsList');
+  if (!list) return;
+  list.replaceChildren();
+  (tips.length ? tips : ['No ATS issues found.']).forEach((message) => {
+    const item = document.createElement('li');
+    item.textContent = message;
+    list.append(item);
+  });
 }
 
 function setStatus(state, message) {
@@ -1248,6 +1263,43 @@ function findUnsupportedChars(data) {
     found.push(character);
   }
   return found;
+}
+
+function getAtsTips(data) {
+  const source = data && typeof data === 'object' ? data : {};
+  const basics = source.basics && typeof source.basics === 'object' ? source.basics : {};
+  const text = (value) => String(value ?? '').trim();
+  const tips = [];
+  if (!text(basics.name)) tips.push('Add your name.');
+  if (!text(basics.email)) tips.push('Add your email.');
+  if (!text(basics.phone)) tips.push('Add your phone number.');
+  if (!text(source.summary)) tips.push('Add a professional summary.');
+  if (!text(source.skills)) tips.push('Add your skills.');
+
+  const countUndated = (entries, keys) => (Array.isArray(entries) ? entries : []).filter((item) => {
+    if (!item || typeof item !== 'object') return false;
+    return keys.some((key) => text(item[key])) && !text(item.dates);
+  }).length;
+  const experienceUndated = countUndated(source.experience, ['role', 'company', 'highlights']);
+  if (experienceUndated === 1) tips.push('1 experience entry has no dates.');
+  else if (experienceUndated > 1) tips.push(`${experienceUndated} experience entries have no dates.`);
+  const educationUndated = countUndated(source.education, ['degree', 'school']);
+  if (educationUndated === 1) tips.push('1 education entry has no dates.');
+  else if (educationUndated > 1) tips.push(`${educationUndated} education entries have no dates.`);
+
+  let longBullets = 0;
+  (Array.isArray(source.experience) ? source.experience : []).forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    String(item.highlights ?? '').split(/\r?\n/).forEach((line) => {
+      if (text(line).length > 200) longBullets += 1;
+    });
+  });
+  if (longBullets === 1) tips.push('1 bullet is longer than 200 characters.');
+  else if (longBullets > 1) tips.push(`${longBullets} bullets are longer than 200 characters.`);
+
+  const unsupported = findUnsupportedChars(source);
+  if (unsupported.length) tips.push(`Unsupported characters: ${unsupported.join(', ')}.`);
+  return tips;
 }
 
 function cvToPlainText(data) {

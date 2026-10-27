@@ -730,6 +730,36 @@ test('unsupported characters are named when a PDF is exported', async ({ page })
   expect(status).toContain('ặ');
 });
 
+test('ATS tips on a fresh CV include the missing email', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  const tips = page.locator('#atsTips');
+  await expect(tips).toBeVisible();
+  await expect(tips.locator('#atsTipsList')).toContainText('Add your email.');
+  await expect(tips.locator('#atsTipsCount')).toHaveText('(5)');
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth);
+});
+
+test('ATS tips drop the missing email after the fields are filled and the count updates', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  const count = page.locator('#atsTipsCount');
+  await expect(count).toHaveText('(5)');
+  await expect(page.locator('#atsTipsList')).toContainText('Add your email.');
+  await page.getByLabel('Full name').fill('Alex Morgan');
+  await page.getByLabel('Email').fill('alex@example.com');
+  await page.getByLabel('Phone').fill('(555) 123-4567');
+  await page.getByLabel(/^Summary/).fill('Builds clear tools for operations teams.');
+  await page.getByLabel(/^Skills/).fill('Figma, research');
+  await expect(page.locator('#atsTipsList')).toHaveText('No ATS issues found.');
+  await expect(page.locator('#atsTipsList')).not.toContainText('Add your email.');
+  await expect(count).toHaveText('(0)');
+});
+
 test('service worker controls the app and supports an offline reload', async ({ page }) => {
   await openApp(page);
   await page.evaluate(() => navigator.serviceWorker.ready);

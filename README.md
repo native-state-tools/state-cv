@@ -32,6 +32,7 @@ npm run test:e2e
 - PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
 - Native selectable-text PDF export in Letter or A4, with Compact, Standard, or Large text, clickable email and website links, and a warning when a character cannot be drawn
 - Copy or download the same CV as plain text on this device
+- ATS tips panel runs locally in the browser and sends nothing anywhere
 - Responsive editor, full-screen preview, and an Edit | Preview | Export bottom bar on screens narrower than 1024px
 - No account or external service required
 

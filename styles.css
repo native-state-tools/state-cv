@@ -141,6 +141,12 @@ h1 em { color: var(--accent); font-family: var(--serif); font-weight: 400; }
 .note-icon { color: var(--accent); font-size: 17px; }
 .ats-note strong { color: #f1f4df; font-size: 11px; }
 .ats-note p { color: #aaa997; font-size: 11px; line-height: 1.5; margin: 3px 0 0; }
+.ats-tips { background: rgba(185, 255, 102, .08); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; margin: 0 0 28px; max-width: 100%; min-width: 0; }
+.ats-tips > summary { color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 700; min-height: 44px; padding: 12px 14px; }
+.ats-tips-count { color: var(--muted); font-weight: 600; }
+.ats-tips ul { margin: 0; padding: 0 14px 14px 2em; }
+.ats-tips li { color: var(--ink); font-size: 13px; line-height: 1.5; margin: 0 0 8px; overflow-wrap: anywhere; }
+.ats-tips li:last-child { margin-bottom: 0; }
 .form-section { border-top: 1px solid var(--line); padding: 29px 0 34px; }
 .section-heading { align-items: flex-start; display: flex; gap: 15px; margin-bottom: 23px; }
 .section-number { color: var(--coral); font-family: Consolas, 'Courier New', monospace; font-size: 11px; padding-top: 4px; }
@@ -301,6 +307,7 @@ html.page-letter { page: letter; }
   .quick-action small { font-size: 11px; }
   .ats-note { min-width: 0; }
   .ats-note > div { min-width: 0; }
+  .ats-tips { margin-bottom: 22px; }
   .editor-panel { padding: 32px 20px calc(96px + env(safe-area-inset-bottom)); }
   .panel-heading { align-items: flex-start; flex-direction: column; gap: 25px; }
   .form-grid { grid-template-columns: 1fr; }
