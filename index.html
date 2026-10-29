@@ -3,191 +3,87 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; worker-src 'self' blob:; connect-src 'self';" />
-  <meta name="description" content="A local-first ATS-compatible CV builder." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';" />
+  <meta name="description" content="A free CV builder that runs in your browser. Your CV stays on your device." />
   <meta name="theme-color" content="#17132d" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon.svg" />
-  <title>State CV | ATS CV Builder</title>
+  <title>State CV | Free, private CV builder</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23b9ff66'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Arial' font-size='18' font-weight='700' fill='%2317132d'%3ES%3C/text%3E%3C/svg%3E" />
-  <script src="vendor/pdf.min.js"></script>
-  <script src="vendor/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <div id="noticeStack">
-    <section class="storage-notice" id="storageNotice" role="status" hidden inert>
-      <p id="storageNoticeMessage"></p>
-      <button class="button button-dark" id="reloadLatestButton" type="button" hidden>Reload latest</button>
-      <button class="button button-accent" id="keepMineButton" type="button" hidden>Keep mine</button>
-      <button class="button button-dark" id="downloadDamagedButton" type="button" hidden>Download damaged data</button>
-      <button class="button button-ghost" id="dismissStorageNoticeButton" type="button" hidden inert>Dismiss</button>
+<body class="landing-page">
+  <header class="landing-header">
+    <p class="landing-brand"><span class="brand-mark">S</span><span>State <b>CV</b></span></p>
+  </header>
+  <main class="landing-main">
+    <section class="landing-hero">
+      <p class="eyebrow">Free <span class="eyebrow-rule"></span> On your device</p>
+      <h1>Build your CV. Keep it yours.</h1>
+      <p class="landing-lead">State CV is a free CV builder that runs in your browser. Your CV stays on your device, and the PDF it makes is easy for job application systems (ATS) to read.</p>
+      <a class="button button-accent landing-open" href="./app/">Open State CV</a>
     </section>
-    <section class="update-notice" id="updateNotice" role="status" hidden inert>
-      <p>A new version of State CV is ready.</p>
-      <button class="button button-accent" id="applyUpdateButton" type="button" aria-describedby="updateBlockedHint" disabled inert>Update now</button>
-      <button class="button button-ghost" id="laterUpdateButton" type="button">Later</button>
-      <p id="updateBlockedHint" hidden inert>Resolve the notice above first.</p>
+
+    <section class="landing-section">
+      <h2>CV or resume?</h2>
+      <p>A CV is your full career record: everything you have done. A resume is a shorter version picked for one job. State CV helps you keep the full record and export a clean PDF.</p>
     </section>
-    <section class="storage-notice" id="backupReminder" role="status" hidden inert>
-      <p>You've made a lot of changes. Download a backup to keep a copy safe.</p>
-      <button class="button button-accent" id="backupReminderDownload" type="button">Download backup</button>
-      <button class="button button-ghost" id="backupReminderLater" type="button">Not now</button>
-      <button class="button button-dark" id="backupReminderSnooze" type="button">Remind me in 7 days</button>
-    </section>
-  </div>
-  <div class="undo-toast" id="undoToast" role="status" hidden inert>
-    <p id="undoToastMessage"></p>
-    <button class="button button-accent" id="undoRemovalButton" type="button">Undo</button>
-  </div>
-  <section class="launch-screen" id="launchScreen" aria-label="State CV start screen">
-    <div class="launch-glow launch-glow-one"></div>
-    <div class="launch-glow launch-glow-two"></div>
-    <div class="launch-inner">
-      <div class="launch-brand"><span class="brand-mark">S</span><span>State <b>CV</b></span></div>
-      <div class="launch-copy">
-        <p class="eyebrow">Private workspace <span class="eyebrow-rule"></span> Local-first</p>
-        <h1>Make your next<br /><em>move count.</em></h1>
-        <p class="launch-intro">Build a clear, ATS-ready CV from a blank page or bring your existing PDF with you.</p>
+
+    <section class="landing-section">
+      <h2>Three promises</h2>
+      <div class="landing-promises">
+        <article class="landing-card">
+          <h3>Stays on your device</h3>
+          <p>No account, and nothing is uploaded.</p>
+        </article>
+        <article class="landing-card">
+          <h3>Free, no account</h3>
+          <p>No sign-up, no ads, and no tracking.</p>
+        </article>
+        <article class="landing-card">
+          <h3>ATS-friendly</h3>
+          <p>A plain layout and real text that application systems read correctly.</p>
+        </article>
       </div>
-      <div class="launch-actions">
-        <button class="launch-card launch-card-primary" id="continueButton" type="button"><span class="launch-card-icon">↗</span><span><strong id="continueLabel">Continue your CV</strong><small id="continueMeta">Saved locally</small></span><span class="launch-card-arrow">→</span></button>
-        <button class="launch-card" id="newCvButton" type="button"><span class="launch-card-icon">＋</span><span><strong>Start a new CV</strong><small>Begin with a clean workspace</small></span><span class="launch-card-arrow">→</span></button>
-        <button class="launch-card" id="launchImportButton" type="button"><span class="launch-card-icon launch-pdf-icon">PDF</span><span><strong>Import a PDF</strong><small>Extract your existing CV</small></span><span class="launch-card-arrow">→</span></button>
-      </div>
-      <p class="launch-footnote"><span class="workspace-pulse"></span> Your data stays in this browser <a class="about-link" href="./about.html">About and privacy</a></p>
-    </div>
-  </section>
-  <div class="app-shell" id="appShell" inert>
-    <header class="topbar">
-      <a class="brand" id="brandHome" href="#" aria-label="State CV home">
-        <span class="brand-mark">S</span>
-        <span>State <b>CV</b></span>
-      </a>
-      <div class="workspace-label"><span class="workspace-pulse"></span><span id="workspaceName">Untitled CV</span><small>Local workspace</small></div>
-      <div class="topbar-actions">
-        <span class="save-status" id="saveStatus" aria-live="polite"><span class="status-dot"></span>Saved locally</span>
-        <button class="button button-ghost" id="importButton" type="button"><span aria-hidden="true">↥</span> Import</button>
-        <button class="button button-dark preview-action" id="desktopPreviewButton" type="button" aria-controls="previewPanel" aria-expanded="true">Hide preview</button>
-        <button class="button button-accent" id="printButton" type="button" title="Export a selectable-text PDF"><span aria-hidden="true">↗</span> Export PDF</button>
-        <details class="more-menu">
-          <summary class="button button-ghost" aria-controls="moreMenuContent">More</summary>
-          <div class="more-menu-content" id="moreMenuContent">
-            <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup (JSON)</button>
-            <button class="button button-dark" id="copyPlainTextButton" type="button">Copy as plain text</button>
-            <button class="button button-dark" id="downloadPlainTextButton" type="button">Download .txt</button>
-            <button class="button button-dark" id="yourDataButton" type="button">Your data</button>
-            <label class="paper-size-control" title="Choose your PDF page size"><span>PDF page size</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
-            <label class="paper-size-control" title="Choose PDF text size"><span>Text size</span><select id="textSize"><option value="compact">Compact (9 pt)</option><option value="standard" selected>Standard (10.5 pt)</option><option value="large">Large (12 pt)</option></select></label>
-            <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" enterkeyhint="done" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
-            <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
-          </div>
+    </section>
+
+    <section class="landing-section">
+      <h2>How it works</h2>
+      <ol class="landing-steps">
+        <li>Start a new CV or import a PDF you already have.</li>
+        <li>Edit it. It saves in this browser as you type.</li>
+        <li>Export a PDF or plain text, and download a backup.</li>
+      </ol>
+    </section>
+
+    <section class="landing-section">
+      <h2>FAQ</h2>
+      <div class="landing-faq">
+        <details class="landing-faq-item">
+          <summary>Where is my data?</summary>
+          <p>Only in this browser on this device. Clearing the site's data, or switching browsers or devices, means it is not there. Read more in <a href="./about.html">About and privacy</a>.</p>
         </details>
-        <input id="importInput" type="file" accept="application/json,.json,application/pdf,.pdf" hidden />
-        <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden />
-      </div>
-    </header>
-
-    <main class="workspace">
-      <section class="editor-panel" aria-label="CV editor">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">CV builder <span class="eyebrow-rule"></span> Private by default</p>
-            <h1>Build a CV<br /><em>that gets read.</em></h1>
-          </div>
-          <div class="completion-widget">
-            <div class="completion-ring" id="completionRing"><strong id="completionPercent">0%</strong></div>
-            <div><span>CV strength</span><small id="completionLabel">Add your details</small></div>
-          </div>
-        </div>
-
-        <div class="quick-actions"><button class="quick-action" id="importPdfButton" type="button"><span class="quick-icon">PDF</span><span><strong>Start from a PDF</strong><small>Extract your existing CV</small></span><span class="quick-arrow">↗</span></button><div class="ats-note"><span class="note-icon">✦</span><div><strong>ATS-ready by default</strong><p>Clean hierarchy and standard headings keep your story readable by screening software.</p></div></div></div>
-
-        <details id="atsTips" class="ats-tips" open>
-          <summary>ATS tips <span id="atsTipsCount" class="ats-tips-count" aria-live="polite"></span></summary>
-          <ul id="atsTipsList"></ul>
+        <details class="landing-faq-item">
+          <summary>How do I back up?</summary>
+          <p>Open More and choose Backup (JSON). You can also open Your data and choose Download backup. Keep the file somewhere safe. To restore it, choose Import and pick that file.</p>
         </details>
-
-        <form id="resumeForm" autocomplete="off">
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">01</span><div><h2>Contact details</h2><p>The essentials recruiters look for first.</p></div></div>
-            <div class="form-grid">
-              <label class="field field-wide"><span>Full name</span><input data-path="basics.name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Alex Morgan" /></label>
-              <label class="field"><span>Professional title</span><input data-path="basics.title" type="text" autocomplete="organization-title" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Product Designer" /></label>
-              <label class="field"><span>Location</span><input data-path="basics.location" type="text" autocomplete="address-level2" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Austin, TX" /></label>
-              <label class="field"><span>Email</span><input data-path="basics.email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="254" placeholder="alex@email.com" /></label>
-              <label class="field"><span>Phone</span><input data-path="basics.phone" type="tel" inputmode="tel" autocomplete="tel" autocapitalize="off" spellcheck="false" enterkeyhint="next" maxlength="40" placeholder="(555) 123-4567" /></label>
-              <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" type="url" inputmode="url" autocomplete="url" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="300" placeholder="linkedin.com/in/alexmorgan" /></label>
-            </div>
-          </section>
-
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">02</span><div><h2>Professional summary</h2><p>Two to four lines that frame your value.</p></div></div>
-            <label class="field"><span>Summary <b class="character-count" id="summaryCount">0 / 500</b></span><textarea data-path="summary" enterkeyhint="enter" maxlength="500" rows="5" placeholder="Product designer with 6+ years turning complex workflows into clear, useful experiences. Known for pairing thoughtful research with fast, measurable execution."></textarea></label>
-          </section>
-
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">03</span><div><h2>Experience</h2><p>Lead with impact. Start bullets with strong verbs.</p></div><button class="icon-button" id="addExperience" type="button" title="Add experience" aria-label="Add experience">+</button></div>
-            <div id="experienceList" class="repeat-list"></div>
-          </section>
-
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">04</span><div><h2>Education</h2><p>Include your most relevant credentials.</p></div><button class="icon-button" id="addEducation" type="button" title="Add education" aria-label="Add education">+</button></div>
-            <div id="educationList" class="repeat-list"></div>
-          </section>
-
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">05</span><div><h2>Skills</h2><p>Use the language of your target role.</p></div></div>
-            <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" type="text" enterkeyhint="done" maxlength="2000" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
-          </section>
-        </form>
-      </section>
-
-      <aside class="preview-panel" id="previewPanel" aria-label="CV preview">
-        <div class="preview-toolbar"><div><span class="live-dot"></span><span>Live preview</span></div><span class="format-label" id="formatLabel">Letter / selectable text</span></div>
-        <div class="paper-wrap"><article class="resume-paper preview-text-standard" id="resumePreview"></article></div>
-      </aside>
-    </main>
-    <nav class="mobile-view-nav" aria-label="Editor navigation">
-      <button type="button" data-mobile-view-button="edit" aria-pressed="true">Edit</button>
-      <button type="button" data-mobile-view-button="preview" aria-pressed="false">Preview</button>
-      <button type="button" id="mobileExportButton" aria-label="Export PDF">Export</button>
-    </nav>
-  </div>
-  <dialog class="data-dialog" id="yourDataDialog" aria-labelledby="yourDataTitle">
-    <div class="data-dialog-header">
-      <div><p class="eyebrow">Local workspace</p><h2 id="yourDataTitle">Your data</h2></div>
-      <button class="icon-button" id="closeYourDataButton" type="button" aria-label="Close Your data">×</button>
-    </div>
-    <dl class="data-summary">
-      <div><dt>Last saved</dt><dd id="dataLastSaved">Not saved yet</dd></div>
-      <div><dt>Approximate stored size</dt><dd id="dataStoredSize">Calculating…</dd></div>
-      <div><dt>Persistence request</dt><dd id="dataPersistenceStatus">Not requested yet</dd></div>
-      <div><dt>Current persistence</dt><dd id="dataLivePersistenceStatus">Checking…</dd></div>
-      <div><dt>App version</dt><dd id="dataAppVersion">Checking…</dd></div>
-    </dl>
-    <p class="data-dialog-note">Storage behavior can differ when opening index.html directly from your device; this does not imply the same behavior as the hosted site.</p>
-    <p class="data-dialog-note"><a class="about-link" href="./about.html">About and privacy</a></p>
-    <section class="data-snapshots" aria-labelledby="snapshotsTitle">
-      <h3 id="snapshotsTitle">Recent snapshots</h3>
-      <p id="snapshotsEmpty">No snapshots yet.</p>
-      <div id="snapshotsList"></div>
+        <details class="landing-faq-item">
+          <summary>Is it really free?</summary>
+          <p>Yes. Everything State CV does today is free with no account.</p>
+        </details>
+        <details class="landing-faq-item">
+          <summary>Does it work offline?</summary>
+          <p>After the first visit, yes, in supported browsers.</p>
+        </details>
+      </div>
     </section>
-    <p class="data-dialog-status" id="dataDialogStatus" role="status"></p>
-    <div class="data-dialog-actions">
-      <button class="button button-dark" id="downloadBackupButton" type="button">Download backup</button>
-      <button class="button button-dark" id="downloadDamagedDialogButton" type="button" hidden inert>Download damaged data</button>
-      <button class="button button-caution" id="clearDataButton" type="button">Clear all data</button>
-      <button class="button button-ghost" id="closeYourDataFooterButton" type="button">Close</button>
-    </div>
-  </dialog>
-  <template id="experienceTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" type="text" enterkeyhint="next" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" type="text" enterkeyhint="next" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" enterkeyhint="enter" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>
-  </template>
-  <template id="educationTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button">×</button><div class="form-grid"><label class="field field-wide"><span>Degree or credential</span><input data-key="degree" type="text" enterkeyhint="next" maxlength="200" placeholder="BFA, Interaction Design" /></label><label class="field"><span>School</span><input data-key="school" type="text" enterkeyhint="next" maxlength="200" placeholder="State University" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2014 — 2018" /></label></div></article>
-  </template>
-  <script src="storage.js"></script>
-  <script src="app.js"></script>
+  </main>
+  <footer class="landing-footer">
+    <p>State CV is part of <a href="https://nativestatetools.com/" rel="noreferrer">Native State Tools</a>.</p>
+    <p class="landing-footer-links">
+      <a href="https://github.com/native-state-tools/state-cv" rel="noreferrer">Source code</a>
+      <a href="./about.html">About and privacy</a>
+    </p>
+  </footer>
 </body>
 </html>

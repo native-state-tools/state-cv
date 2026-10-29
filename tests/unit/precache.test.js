@@ -16,3 +16,14 @@ test('every precached file exists', () => {
     assert.equal(fs.existsSync(filePath) && fs.statSync(filePath).isFile(), true, `missing precache file: ${url}`);
   }
 });
+
+test('precache includes the landing page and the app, and the manifest opens the app', () => {
+  assert.ok(block, 'PRECACHE_URLS was not found in sw.js');
+  const urls = [...block[1].matchAll(/['"](\.\/[^'"]+)['"]/g)].map((match) => match[1]);
+  assert.ok(urls.includes('./index.html'));
+  assert.ok(urls.includes('./app/index.html'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.start_url, './app/');
+  assert.equal(manifest.scope, './');
+  assert.equal(manifest.id, './');
+});

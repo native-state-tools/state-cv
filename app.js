@@ -75,7 +75,7 @@ try {
   console.warn('State CV could not read saved snapshots.', error);
 }
 
-if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = '../vendor/pdf.worker.min.js';
 
 function safeFilename(value, fallback = 'CV') {
   const filename = String(value)
@@ -2256,7 +2256,7 @@ document.querySelector('#laterUpdateButton').addEventListener('click', () => {
 });
 
 if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((registration) => {
+  navigator.serviceWorker.register('../sw.js', { scope: '../', updateViaCache: 'none' }).then((registration) => {
     serviceWorkerRegistration = registration;
     if (registration.waiting && navigator.serviceWorker.controller) showUpdateNotice(registration.waiting);
     registration.addEventListener('updatefound', () => {
