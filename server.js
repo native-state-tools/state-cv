@@ -13,6 +13,18 @@ const types = {
   '.pdf': 'application/pdf'
 };
 
+function sendFile(response, filePath) {
+  fs.readFile(filePath, (error, content) => {
+    if (error) {
+      response.writeHead(error.code === 'ENOENT' ? 404 : 500);
+      response.end(error.code === 'ENOENT' ? 'Not found' : 'Server error');
+      return;
+    }
+    response.writeHead(200, { 'Content-Type': types[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
+    response.end(content);
+  });
+}
+
 http.createServer((request, response) => {
   let requested;
   try {
@@ -22,21 +34,29 @@ http.createServer((request, response) => {
     response.end('Bad request');
     return;
   }
-  const relativePath = requested === '/' ? 'index.html' : requested.replace(/^\/+/, '');
+  if (!requested.startsWith('/')) {
+    response.writeHead(400);
+    response.end('Bad request');
+    return;
+  }
+  const relativePath = requested.replace(/^\/+/, '');
   const filePath = path.resolve(root, relativePath);
-  if (!filePath.startsWith(root + path.sep)) {
+  if (filePath !== root && !filePath.startsWith(root + path.sep)) {
     response.writeHead(403);
     response.end('Forbidden');
     return;
   }
-  fs.readFile(filePath, (error, content) => {
-    if (error) {
-      response.writeHead(error.code === 'ENOENT' ? 404 : 500);
-      response.end(error.code === 'ENOENT' ? 'Not found' : 'Server error');
+  fs.stat(filePath, (statError, stat) => {
+    if (!statError && stat.isDirectory()) {
+      if (!requested.endsWith('/')) {
+        response.writeHead(301, { Location: `${requested}/` });
+        response.end();
+        return;
+      }
+      sendFile(response, path.join(filePath, 'index.html'));
       return;
     }
-    response.writeHead(200, { 'Content-Type': types[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
-    response.end(content);
+    sendFile(response, filePath);
   });
 }).listen(3000, '127.0.0.1', () => {
   console.log('State CV running at 127.0.0.1:3000');

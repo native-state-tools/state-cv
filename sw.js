@@ -1,7 +1,8 @@
-const CACHE_NAME = 'state-cv-cache-v23';
+const CACHE_NAME = 'state-cv-cache-v24';
 const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',
+  './app/index.html',
   './about.html',
   './styles.css',
   './storage.js',
@@ -52,9 +53,16 @@ self.addEventListener('fetch', (event) => {
   const precachedAsset = PRECACHE_URLS.find((path) => new URL(path, self.location).pathname === url.pathname);
 
   if (request.mode === 'navigate') {
+    const appDirectory = new URL('./app/', self.location).pathname;
+    if (`${url.pathname}/` === appDirectory) {
+      event.respondWith(Response.redirect(new URL(appDirectory, self.location.origin).href, 301));
+      return;
+    }
+    const directoryIndex = url.pathname.endsWith('/') ? `${url.pathname}index.html` : url.pathname;
     const navigatedPage = PRECACHE_URLS.find((path) =>
-      path.endsWith('.html') && new URL(path, self.location).pathname === url.pathname);
-    const pageUrl = new URL(navigatedPage || './index.html', self.location).href;
+      path.endsWith('.html') && new URL(path, self.location).pathname === directoryIndex);
+    const fallbackPage = url.pathname.startsWith(appDirectory) ? './app/index.html' : './index.html';
+    const pageUrl = new URL(navigatedPage || fallbackPage, self.location).href;
     event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(pageUrl))
       .then((cached) => cached || fetch(request)));
     return;

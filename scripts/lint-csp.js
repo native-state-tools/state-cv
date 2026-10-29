@@ -4,6 +4,23 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
+const ALLOWED_ANCHOR_HREFS = new Set([
+  'https://nativestatetools.com/',
+  'https://github.com/native-state-tools/state-cv'
+]);
+
+function withoutAllowedAnchors(text) {
+  return text.replace(/<a\b[^>]*>/gi, (tag) => {
+    const hrefMatch = tag.match(/\bhref\s*=\s*(['"])([^'"]*)\1/i);
+    if (!hrefMatch || !ALLOWED_ANCHOR_HREFS.has(hrefMatch[2])) return tag;
+    return tag.replace(/\bhref\s*=\s*(['"])[^'"]*\1/i, 'href="./"');
+  });
+}
+
+function sourceForRule(ruleName, text) {
+  return ruleName === 'external-runtime-target' ? withoutAllowedAnchors(text) : text;
+}
+
 const rules = [
   ['inline-style-attribute', /<\s*[^>]+\sstyle\s*=/i, 'HTML style attribute'],
   ['style-setattribute', /\.setAttribute\s*\(\s*(['"])style\1/i, "setAttribute('style')"],
@@ -37,6 +54,10 @@ const samples = [
   ['export const value = 1;', 'module-import-export'],
   ['<script src="https://example.test/app.js"></script>', 'external-runtime-target'],
   ['<a href="http://example.test/">', 'external-runtime-target'],
+  ['<a href="https://example.test/">', 'external-runtime-target'],
+  ['<link href="https://example.test/style.css">', 'external-runtime-target'],
+  ['<link href="https://nativestatetools.com/">', 'external-runtime-target'],
+  ['<a href="https://nativestatetools.com/" src="https://evil.test/x">', 'external-runtime-target'],
   ["fetch('https://example.test/data')", 'external-runtime-target'],
   [`const markup = '<span style="color:red">';`, 'html-string-inline-style'],
   ['const request = new XMLHttpRequest();', 'xmlhttprequest'],
@@ -46,7 +67,7 @@ const samples = [
 ];
 
 function matchingRules(text) {
-  return rules.filter(([, pattern]) => pattern.test(text)).map(([name]) => name);
+  return rules.filter(([name, pattern]) => pattern.test(sourceForRule(name, text))).map(([name]) => name);
 }
 
 function selfTest() {
@@ -57,8 +78,15 @@ function selfTest() {
       `Expected sample ${index + 1} to trigger ${expectedRule}: ${sample}`
     );
   });
-  assert.equal(matchingRules('fetch("/local.json"); node.textContent = value;').length, 0);
-  console.log(`Lint self-test passed: ${samples.length} in-memory bad samples were rejected; local-safe sample accepted.`);
+  const safeSamples = [
+    'fetch("/local.json"); node.textContent = value;',
+    '<a href="https://nativestatetools.com/" rel="noreferrer">Native State Tools</a>',
+    '<a href="https://github.com/native-state-tools/state-cv" rel="noreferrer">Source code</a>'
+  ];
+  safeSamples.forEach((sample) => {
+    assert.equal(matchingRules(sample).length, 0, `Expected a local-safe sample to pass: ${sample}`);
+  });
+  console.log(`Lint self-test passed: ${samples.length} in-memory bad samples were rejected; ${safeSamples.length} local-safe samples accepted.`);
 }
 
 function listJavaScriptFiles(directory) {
@@ -77,7 +105,7 @@ function checkSyntax(files) {
 }
 
 function lintSources() {
-  const htmlFiles = ['index.html', 'about.html'].map((file) => {
+  const htmlFiles = ['index.html', 'about.html', 'app/index.html'].map((file) => {
     const htmlPath = path.join(root, file);
     return [htmlPath, fs.readFileSync(htmlPath, 'utf8')];
   });
@@ -93,7 +121,7 @@ function lintSources() {
     else if (ruleName === 'html-string-inline-style') targets = appAndStorage.concat(scriptSources.filter(([file]) => path.basename(file) === 'sw.js'));
     else if (['xmlhttprequest', 'websocket', 'import-scripts', 'send-beacon'].includes(ruleName)) targets = appAndStorage;
     for (const [file, source] of targets) {
-      if (pattern.test(source)) findings.push(`${path.relative(root, file)}: ${description}`);
+      if (pattern.test(sourceForRule(ruleName, source))) findings.push(`${path.relative(root, file)}: ${description}`);
     }
   }
   if (findings.length) {

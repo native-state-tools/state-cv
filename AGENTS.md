@@ -9,7 +9,7 @@
 ## Project profile
 
 - State CV is a local-first, privacy-first ATS CV builder by Native State Tools.
-- Vanilla HTML/CSS/JavaScript, hosted on GitHub Pages. `app.js` owns editor state, PDF import and PDF export; `storage.js` owns local persistence (revisions, snapshots, damaged-data quarantine); `index.html` owns markup and the CSP; `styles.css` owns presentation; `sw.js` is the offline service worker.
+- Vanilla HTML/CSS/JavaScript, hosted on GitHub Pages. `index.html` is the landing page. `app/index.html` owns the app markup and its CSP. `app.js` owns editor state, PDF import and PDF export; `storage.js` owns local persistence (revisions, snapshots, damaged-data quarantine); `styles.css` owns presentation; `sw.js` is the offline service worker.
 - `server.js` is only a Node built-in-module static development server bound to `127.0.0.1:3000`. It is not an application backend.
 - PDF.js 3.11.174 and jsPDF 2.5.1 are vendored in `vendor/`. Never replace them with CDN scripts or runtime downloads.
 
@@ -17,7 +17,7 @@
 
 - **Data stays on the device.** No analytics, telemetry, tracking, or outbound runtime requests. No Web Share or any other path that sends a CV off the device without a separate privacy review. Accounts, sync and cloud storage are out of scope until a reviewed phase in `plan.md` approves them.
 - **CSP is a meta tag** (GitHub Pages cannot send headers). Preserve and tighten it. Keep scripts, styles, workers, fonts, images and connections local.
-- **Classic scripts only.** No ES modules. `index.html` must keep working when opened from `file://`. New script files load in order from `index.html`.
+- **Classic scripts only.** No ES modules. `app/index.html` must keep working when opened from `file://`. New script files load in order from `app/index.html`.
 - **No dynamic HTML.** Build UI with DOM calls (`createElement`, `textContent`). Never use `innerHTML`, `insertAdjacentHTML` or `outerHTML` with dynamic data. No inline `style` attributes and no `setAttribute('style')`; CSSOM (`el.style.x`, `style.setProperty`) is fine.
 - **Storage format is fixed.** Do not change storage keys or the data format without a migration. Keys: `state-cv-data-v1`, `state-cv-snapshots-v1`, `state-cv-damaged-v1`, `state-cv-persistence-v1`, `state-cv-backup-reminder-v1`. Keep JSON backup and restore human-readable.
 - **Service worker:** bump `CACHE_NAME` in `sw.js` on ANY change to a precached file, and add new precached files to its list.
@@ -41,7 +41,7 @@
 ## Testing and validation
 
 - Run `npm run lint`, `npm run lint:selftest`, `npm run test:unit` and `npm run test:e2e`. Report each as PASS / FAIL / COULD NOT TEST with the command output. Do not claim a result you did not see.
-- Smoke test with `npm start` at `127.0.0.1:3000`; opening `index.html` directly must still work.
+- Smoke test with `npm start` at `127.0.0.1:3000/app/`; opening `app/index.html` directly must still work.
 - Confirm there are no new external URLs, package downloads, console errors, CSP violations or data transmissions. Verify with networking disabled when practical.
 - Use the Playwright projects (360x640, 390x844, 1440x900) for viewport claims, not a manually resized window.
 - Mobile is tested on Android only. iPhone/iOS is not a tested target; do not raise or schedule iOS work.

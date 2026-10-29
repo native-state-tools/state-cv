@@ -22,7 +22,7 @@ If a CV is already saved, importing a PDF or JSON backup asks you to confirm bef
 npm start
 ```
 
-Then open `127.0.0.1:3000`. The server uses only Node's built-in modules and does not install or download anything. The app also works by opening `index.html` directly in a browser.
+Then open `127.0.0.1:3000` (landing) or `127.0.0.1:3000/app/` (app). The server uses only Node's built-in modules and does not install or download anything. The app also works by opening `app/index.html` directly in a browser.
 
 ## Tests
 

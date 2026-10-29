@@ -47,7 +47,7 @@ const validBackup = {
 };
 
 async function openApp(page) {
-  await page.goto('/');
+  await page.goto('/app/');
   await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
 }
 
@@ -305,7 +305,7 @@ test('Clear all data requires a second click and then empties local storage', as
 
 test('file:// load starts and supports editing without service-worker registration', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-1440', 'Direct-file support is checked on the desktop project only.');
-  const indexPath = path.resolve(__dirname, '../../index.html');
+  const indexPath = path.resolve(__dirname, '../../app/index.html');
   await page.goto(pathToFileURL(indexPath).href);
   await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
   expect(page.context().serviceWorkers()).toHaveLength(0);
@@ -858,7 +858,7 @@ test('Undo toast disappears when a second removal replaces it and restores that 
 });
 
 test('Backup reminder shows after many edits and stays hidden after Remind me in 7 days', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app/');
   await page.evaluate(() => {
     localStorage.setItem('state-cv-backup-reminder-v1', JSON.stringify({
       lastBackupAt: 0,
@@ -1031,6 +1031,7 @@ test('About and privacy page loads, links back, and does not overflow', async ({
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
 
   await page.getByRole('link', { name: 'Back to State CV' }).click();
+  await expect(page).toHaveURL(/\/app\/$/);
   await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
   await enterEditor(page);
   await openDataDialog(page);
@@ -1040,7 +1041,7 @@ test('About and privacy page loads, links back, and does not overflow', async ({
 });
 
 test('Backup reminder Download backup starts a JSON download and resets the counter', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app/');
   await page.evaluate(() => {
     localStorage.setItem('state-cv-backup-reminder-v1', JSON.stringify({
       lastBackupAt: 0,
@@ -1207,4 +1208,74 @@ test('Import confirm not shown without a draft', async ({ page }) => {
   await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
   await expect(page.getByLabel('Full name')).toHaveValue('Jordan Ellis');
   expect(sawDialog).toBe(false);
+});
+
+const allowedOutsideLinks = [
+  'https://nativestatetools.com/',
+  'https://github.com/native-state-tools/state-cv'
+];
+
+test('Landing page shows the promises and opens the app', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1, name: 'Build your CV. Keep it yours.' })).toBeVisible();
+  for (const name of ['Stays on your device', 'Free, no account', 'ATS-friendly']) {
+    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  }
+  for (const name of ['Where is my data?', 'How do I back up?', 'Is it really free?', 'Does it work offline?']) {
+    await expect(page.locator('summary').filter({ hasText: name })).toBeVisible();
+  }
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth);
+  await page.getByRole('link', { name: 'Open State CV' }).click();
+  await expect(page).toHaveURL(/\/app\/$/);
+  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+});
+
+test('Landing page has no scripts and only the two allowed outside links', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('script')).toHaveCount(0);
+  const httpsLinks = await page.evaluate(() => [...document.querySelectorAll('[href]')]
+    .map((element) => element.getAttribute('href'))
+    .filter((href) => /^https?:\/\//i.test(href || '')));
+  expect(httpsLinks.length).toBeGreaterThan(0);
+  for (const href of httpsLinks) expect(allowedOutsideLinks).toContain(href);
+});
+
+test('Landing page and app both load offline from the service worker', async ({ page }) => {
+  await page.goto('/app/');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), { timeout: 15000 }).toBe(true);
+  await page.context().setOffline(true);
+  try {
+    await page.reload();
+    await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Build your CV. Keep it yours.' })).toBeVisible();
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+});
+
+test('Landing: /app without a slash redirects to /app/', async ({ page }) => {
+  const response = await page.request.get('/app');
+  expect(response.url()).toMatch(/\/app\/$/);
+  expect(response.ok()).toBeTruthy();
+  await page.goto('/app/');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), { timeout: 15000 }).toBe(true);
+  await page.goto('/app');
+  await expect(page).toHaveURL(/\/app\/$/);
+  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+});
+
+test('Landing page opens from file://', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1440', 'Direct-file support is checked on the desktop project only.');
+  const indexPath = path.resolve(__dirname, '../../index.html');
+  await page.goto(pathToFileURL(indexPath).href);
+  await expect(page.getByRole('heading', { level: 1, name: 'Build your CV. Keep it yours.' })).toBeVisible();
 });
