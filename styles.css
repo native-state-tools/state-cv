@@ -44,7 +44,8 @@ button { cursor: pointer; }
 .launch-card-arrow { color: var(--accent); font-size: 20px; margin-left: auto; }
 .launch-footnote { color: var(--muted); font-size: 9px; margin: 32px 0 0; text-transform: uppercase; }
 .about-link { color: var(--accent); font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 14px; font-weight: 700; text-decoration: underline; text-transform: none; text-underline-offset: 3px; }
-.launch-footnote .about-link { display: block; margin: 10px 0 0; width: fit-content; }
+.launch-footnote-links { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 10px; }
+.launch-footnote .about-link { display: inline-flex; margin: 0; width: fit-content; }
 .launch-glow { border: 1px solid rgba(217, 179, 130, .12); border-radius: 50%; height: 500px; position: absolute; width: 500px; }
 .launch-glow-one { right: -170px; top: -160px; }
 .launch-glow-two { bottom: -370px; left: -230px; }
@@ -324,7 +325,7 @@ html.page-letter { page: letter; }
   .preview-panel { padding: 22px 12px; }
   .resume-paper { min-height: 700px; padding: 32px 20px; }
   .launch-inner { padding: 34px 22px; }
-  .launch-copy { margin: 82px 0 34px; }
+  .launch-copy { margin: 60px 0 14px; }
   .launch-copy h1 { font-size: 48px; }
   .launch-intro { font-size: 13px; }
   .launch-actions { grid-template-columns: 1fr; }

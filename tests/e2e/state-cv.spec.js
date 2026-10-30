@@ -1329,7 +1329,8 @@ test('Import confirm for a saved CV keeps the snapshot wording', async ({ page }
 
 const allowedOutsideLinks = [
   'https://nativestatetools.com/',
-  'https://github.com/native-state-tools/state-cv'
+  'https://github.com/native-state-tools/state-cv',
+  'https://ko-fi.com/nativestatetools'
 ];
 
 test('Landing page shows the promises and opens the app', async ({ page }) => {
@@ -1352,7 +1353,7 @@ test('Landing page shows the promises and opens the app', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
 });
 
-test('Landing page has no scripts and only the two allowed outside links', async ({ page }) => {
+test('Landing page has no scripts and only the allowed outside links', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('script')).toHaveCount(0);
   const httpsLinks = await page.evaluate(() => [...document.querySelectorAll('[href]')]
@@ -1360,6 +1361,41 @@ test('Landing page has no scripts and only the two allowed outside links', async
     .filter((href) => /^https?:\/\//i.test(href || '')));
   expect(httpsLinks.length).toBeGreaterThan(0);
   for (const href of httpsLinks) expect(allowedOutsideLinks).toContain(href);
+});
+
+async function expectSupportLinks(page) {
+  const links = page.locator('a[href="https://ko-fi.com/nativestatetools"]');
+  expect(await links.count()).toBeGreaterThan(0);
+  const count = await links.count();
+  for (let index = 0; index < count; index += 1) {
+    const link = links.nth(index);
+    await expect(link).toHaveText('Support State CV');
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', /noopener/);
+  }
+}
+
+test('Support State CV and contact email are plain links, with no Ko-fi request on load', async ({ page }) => {
+  const kofiRequests = [];
+  page.on('request', (request) => {
+    if (request.url().includes('ko-fi.com')) kofiRequests.push(request.url());
+  });
+
+  await page.goto('/');
+  await expectSupportLinks(page);
+  await expect(page.locator('a[href="mailto:hello@nativestatetools.com"]')).toHaveCount(1);
+
+  await page.goto('/about.html');
+  await expectSupportLinks(page);
+  await expect(page.locator('a[href="mailto:hello@nativestatetools.com"]')).toHaveCount(1);
+  await expect(page.getByText('State CV is free and always will be. If it helped you, you can chip in on Ko-fi. Nothing is locked.')).toBeVisible();
+  await expect(page.getByText("The Support link opens Ko-fi's website in a new tab. State CV itself sends nothing to Ko-fi, and your CV never leaves your device.")).toBeVisible();
+
+  await page.goto('/app/');
+  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+  await expectSupportLinks(page);
+
+  expect(kofiRequests).toEqual([]);
 });
 
 test('Landing page and app both load offline from the service worker', async ({ page }) => {
