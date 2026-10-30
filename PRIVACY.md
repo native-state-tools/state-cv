@@ -2,7 +2,7 @@
 
 State CV is a local-first application: your CV content stays on your device. The app may download its own static files and updates from the same origin that hosts it.
 
-The landing page is the site root, and the app is at `/app/`. The current address is https://nativestatetools.com/state-cv/. A move to https://cv.nativestatetools.com is coming. Saved data does not follow an address change. Before that move, open **More** and choose **Backup (JSON)**, or open **Your data** and choose **Download backup**. Then use **Import** at the new address.
+The landing page is the site root, and the app is at `/app/`. State CV now lives at https://cv.nativestatetools.com/ (app at https://cv.nativestatetools.com/app/). If you used State CV at an older address (native-state-tools.github.io/state-cv/ or nativestatetools.com/state-cv/), your saved CV stays there. Open the old address, open **More** and choose **Backup (JSON)**, then use **Import** at the new address.
 
 - **No accounts.** There is nothing to sign up for and nothing to identify you.
 

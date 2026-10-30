@@ -4,9 +4,9 @@ State CV is a local-first ATS CV builder by Native State Tools. Your CV stays in
 
 The landing page is at the root of the site. The app is at `/app/`.
 
-The current address is https://nativestatetools.com/state-cv/. A move to https://cv.nativestatetools.com is coming. Saved data does not follow an address change. Before that move, export a JSON backup: open **More** and choose **Backup (JSON)**, or open **Your data** and choose **Download backup**. Then use **Import** at the new address.
+State CV now lives at https://cv.nativestatetools.com/ (app at https://cv.nativestatetools.com/app/). If you used State CV at an older address (native-state-tools.github.io/state-cv/ or nativestatetools.com/state-cv/), your saved CV stays there. Open the old address, open **More** and choose **Backup (JSON)**, then use **Import** at the new address.
 
-[Landing page](https://nativestatetools.com/state-cv/) · [Open the app](https://nativestatetools.com/state-cv/app/) · [About and privacy](https://nativestatetools.com/state-cv/about.html)
+[Landing page](https://cv.nativestatetools.com/) · [Open the app](https://cv.nativestatetools.com/app/) · [About and privacy](https://cv.nativestatetools.com/about.html)
 
 ![State CV editor and preview after importing a CV](docs/screenshot.png)
 
