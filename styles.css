@@ -423,10 +423,20 @@ html.page-letter { page: letter; }
 }
 .landing-faq-item p { margin: 0 0 14px; }
 .landing-footer {
-  border-top: 1px solid var(--line);
+  border-top: 0;
   color: var(--ink);
   padding-bottom: 48px;
   padding-top: 22px;
+  position: relative;
+}
+.landing-footer::before {
+  background: var(--line);
+  content: "";
+  height: 1px;
+  left: 22px;
+  position: absolute;
+  right: 22px;
+  top: 0;
 }
 .landing-footer p { font-size: 16px; line-height: 1.55; margin: 0 0 12px; }
 .landing-footer-links { display: flex; flex-wrap: wrap; gap: 8px 18px; }
