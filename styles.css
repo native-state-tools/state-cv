@@ -9,6 +9,7 @@
   --canvas: #0E1726;
   --accent: #D9B382;
   --cv-accent: #5FC4B8;
+  --danger: #F28B82;
   --serif: Georgia, 'Times New Roman', serif;
   --notice-height: 0px;
   --topbar-height: 0px;
@@ -67,7 +68,7 @@ button { cursor: pointer; }
 .save-status { color: var(--muted); font-family: Consolas, 'Courier New', monospace; font-size: 10px; letter-spacing: .03em; margin-right: 10px; text-transform: uppercase; }
 .status-dot, .live-dot { background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px rgba(217, 179, 130, .55); display: inline-block; height: 7px; margin-right: 6px; width: 7px; }
 .save-status.saving .status-dot { background: var(--focus-ring); box-shadow: 0 0 8px rgba(230, 197, 148, .55); }
-.save-status.error .status-dot { background: var(--cv-accent); box-shadow: 0 0 8px rgba(95, 196, 184, .55); }
+.save-status.error .status-dot { background: var(--danger); box-shadow: 0 0 8px rgba(242, 139, 130, .55); }
 #noticeStack { position: sticky; top: 0; z-index: 40; }
 .storage-notice, .update-notice { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 4vw; width: 100%; }
 .storage-notice { background: var(--paper); border-bottom: 1px solid var(--notice-border); }
