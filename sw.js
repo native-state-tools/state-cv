@@ -1,4 +1,4 @@
-const CACHE_NAME = 'state-cv-cache-v24';
+const CACHE_NAME = 'state-cv-cache-v25';
 const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',
@@ -53,16 +53,25 @@ self.addEventListener('fetch', (event) => {
   const precachedAsset = PRECACHE_URLS.find((path) => new URL(path, self.location).pathname === url.pathname);
 
   if (request.mode === 'navigate') {
+    const scopeDirectory = new URL('./', self.location).pathname;
     const appDirectory = new URL('./app/', self.location).pathname;
     if (`${url.pathname}/` === appDirectory) {
-      event.respondWith(Response.redirect(new URL(appDirectory, self.location.origin).href, 301));
+      const redirectTarget = new URL(appDirectory, self.location.origin);
+      redirectTarget.search = url.search;
+      event.respondWith(Response.redirect(redirectTarget.href, 301));
       return;
     }
     const directoryIndex = url.pathname.endsWith('/') ? `${url.pathname}index.html` : url.pathname;
     const navigatedPage = PRECACHE_URLS.find((path) =>
       path.endsWith('.html') && new URL(path, self.location).pathname === directoryIndex);
-    const fallbackPage = url.pathname.startsWith(appDirectory) ? './app/index.html' : './index.html';
-    const pageUrl = new URL(navigatedPage || fallbackPage, self.location).href;
+    const isFolder = (directory) => url.pathname === directory || `${url.pathname}/` === directory;
+    const folderFallback = isFolder(appDirectory)
+      ? './app/index.html'
+      : isFolder(scopeDirectory)
+        ? './index.html'
+        : '';
+    if (!navigatedPage && !folderFallback) return;
+    const pageUrl = new URL(navigatedPage || folderFallback, self.location).href;
     event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(pageUrl))
       .then((cached) => cached || fetch(request)));
     return;

@@ -2,7 +2,11 @@
 
 State CV is a local-first ATS CV builder by Native State Tools. Your CV stays in this browser.
 
-[Open the app](https://native-state-tools.github.io/state-cv/) · [About and privacy](https://native-state-tools.github.io/state-cv/about.html)
+The landing page is at the root of the site. The app is at `/app/`.
+
+The current address is https://nativestatetools.com/state-cv/. A move to https://cv.nativestatetools.com is coming. Saved data does not follow an address change. Before that move, export a JSON backup: open **More** and choose **Backup (JSON)**, or open **Your data** and choose **Download backup**. Then use **Import** at the new address.
+
+[Landing page](https://nativestatetools.com/state-cv/) · [Open the app](https://nativestatetools.com/state-cv/app/) · [About and privacy](https://nativestatetools.com/state-cv/about.html)
 
 ![State CV editor and preview after importing a CV](docs/screenshot.png)
 
@@ -14,7 +18,7 @@ State CV is a local-first ATS CV builder by Native State Tools. Your CV stays in
 4. Choose **Export PDF**, or open **More** and use **Copy as plain text** or **Download .txt**.
 5. Download a backup from **More** (**Backup (JSON)**) or from **Your data** (**Download backup**).
 
-If a CV is already saved, importing a PDF or JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under Recent snapshots.
+If the saved CV has real content, importing a PDF or a JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under **Recent snapshots**. A blank saved CV, such as one from **Start a new CV** or **Start new CV** with nothing typed, does not ask. If the saved data could not be read, the question says that no snapshot copy is available.
 
 ## Run
 
@@ -43,7 +47,7 @@ npm run test:e2e
 - A **Your data** dialog with the last-save time, approximate storage size, persistence request result and live browser status, snapshot restore, backup download, damaged-data download, and two-step clear
 - JSON import and export for backup (imports up to 2 MB); backups are versioned and validated before use
 - PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
-- If a CV is already saved, importing a PDF or JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under Recent snapshots
+- If the saved CV has real content, importing a PDF or a JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under **Recent snapshots**. A blank saved CV does not ask. If the saved data could not be read, the question says that no snapshot copy is available
 - Native selectable-text PDF export in Letter or A4, with Compact, Standard, or Large text, clickable email and website links, and a warning when a character cannot be drawn
 - Copy or download the same CV as plain text on this device
 - ATS tips panel runs locally in the browser and sends nothing anywhere
@@ -62,7 +66,7 @@ The `Export PDF` button creates a native Letter or A4 PDF with selectable text, 
 
 PDF.js 3.11.174 and jsPDF 2.5.1 are vendored locally in `vendor/`, fonts use local system stacks, and the Content Security Policy blocks external scripts, styles, fonts, images, workers, and connections. State CV can run with Wi-Fi disabled and makes no external network requests.
 
-Drafts, snapshots, damaged-data copies, and the browser-persistence request result stay in local browser storage. After the first successful save, State CV requests persistent browser storage when the browser supports it; if the request is not granted, it retries on later page loads. The **Your data** dialog shows both the saved request result and the browser's current persistence status when available. Persistence is not a substitute for downloading a JSON backup. Storage behavior may differ when opening `index.html` directly from the file system compared with the hosted site.
+Drafts, snapshots, damaged-data copies, and the browser-persistence request result stay in local browser storage. After the first successful save, State CV requests persistent browser storage when the browser supports it; if the request is not granted, it retries on later page loads. The **Your data** dialog shows both the saved request result and the browser's current persistence status when available. Persistence is not a substitute for downloading a JSON backup. Storage behavior may differ when opening `app/index.html` directly from the file system compared with the hosted site.
 
 ## How updates work
 

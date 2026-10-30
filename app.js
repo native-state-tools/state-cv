@@ -523,6 +523,24 @@ function isBlankPlaceholder(listName, record) {
   return keys.every((key) => record[key] === '');
 }
 
+function isBlankCv(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const blankText = (value) => typeof value === 'string' && value.trim() === '';
+  const basics = data.basics && typeof data.basics === 'object' && !Array.isArray(data.basics) ? data.basics : {};
+  const recordsBlank = (records, keys) => {
+    if (records === undefined) return true;
+    if (!Array.isArray(records)) return false;
+    return records.every((record) => record && typeof record === 'object' && !Array.isArray(record) &&
+      keys.every((key) => blankText(record[key])));
+  };
+  return ['name', 'title', 'location', 'email', 'phone', 'website'].every((key) => blankText(basics[key]))
+    && blankText(data.exportName)
+    && blankText(data.summary)
+    && blankText(data.skills)
+    && recordsBlank(data.experience, ['role', 'company', 'dates', 'highlights'])
+    && recordsBlank(data.education, ['degree', 'school', 'dates']);
+}
+
 function showUndoToast(listName) {
   const toast = document.querySelector('#undoToast');
   const message = document.querySelector('#undoToastMessage');
@@ -1106,6 +1124,33 @@ function hasSavedDraft() {
     console.warn('State CV could not check for a saved draft.', error);
     return false;
   }
+}
+
+function confirmReplacingSavedCv() {
+  const unreadableMessage = 'Importing will replace the saved CV data on this device. It could not be read, so no snapshot copy is available. Continue?';
+  const savedMessage = 'Importing will replace your current CV. A copy is kept in Your data > Recent snapshots. Continue?';
+  if (storageLoadFailed) return window.confirm(unreadableMessage);
+  let raw;
+  try {
+    raw = stateStorage.getItem(STORAGE_KEY);
+  } catch (error) {
+    storageLoadFailed = true;
+    console.warn('State CV could not check for a saved draft.', error);
+    return window.confirm(unreadableMessage);
+  }
+  if (raw === null) return true;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return window.confirm(unreadableMessage);
+  }
+  try {
+    if (isBlankCv(normalizeData(parsed, { strict: true }))) return true;
+  } catch (error) {
+    return window.confirm(unreadableMessage);
+  }
+  return window.confirm(savedMessage);
 }
 
 function updateLaunchScreen() {
@@ -1965,7 +2010,7 @@ async function handlePdfImport(file) {
   try {
     const lines = await extractPdfText(file);
     if (!lines.length) throw new ImportError('This PDF has no selectable text. Try an OCR-enabled PDF.');
-    if (hasSavedDraft() && !window.confirm('Importing will replace your current CV. A copy is kept in Your data > Recent snapshots. Continue?')) {
+    if (!confirmReplacingSavedCv()) {
       setImportStatus('Import cancelled');
       document.querySelector('#pdfInput').value = '';
       document.querySelector('#importInput').value = '';
@@ -2074,7 +2119,7 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
     }
     try {
       const normalized = normalizeData(imported, { strict: true });
-      if (hasSavedDraft() && !window.confirm('Importing will replace your current CV. A copy is kept in Your data > Recent snapshots. Continue?')) {
+      if (!confirmReplacingSavedCv()) {
         setImportStatus('Import cancelled');
         event.target.value = '';
         return;

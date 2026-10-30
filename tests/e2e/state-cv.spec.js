@@ -1210,6 +1210,123 @@ test('Import confirm not shown without a draft', async ({ page }) => {
   expect(sawDialog).toBe(false);
 });
 
+const savedCvMessage = 'Importing will replace your current CV. A copy is kept in Your data > Recent snapshots. Continue?';
+const unreadableCvMessage = 'Importing will replace the saved CV data on this device. It could not be read, so no snapshot copy is available. Continue?';
+
+async function expectBlankSavedCv(page) {
+  await expect.poll(() => page.evaluate(() => {
+    const raw = localStorage.getItem('state-cv-data-v1');
+    if (!raw) return 'missing';
+    try {
+      const data = JSON.parse(raw);
+      const basics = data.basics || {};
+      const texts = [basics.name, basics.title, basics.location, basics.email, basics.phone, basics.website, data.summary, data.skills, data.exportName];
+      const lists = [...(data.experience || []), ...(data.education || [])];
+      const filled = texts.some((value) => String(value || '').trim()) || lists.some((record) =>
+        Object.values(record || {}).some((value) => String(value || '').trim()));
+      return filled ? 'filled' : 'blank';
+    } catch (error) {
+      return 'unreadable';
+    }
+  })).toBe('blank');
+}
+
+async function importWithoutDialog(page, action) {
+  const dialogs = [];
+  const onDialog = (dialog) => {
+    dialogs.push(dialog.message());
+    dialog.dismiss();
+  };
+  page.on('dialog', onDialog);
+  let actionError = null;
+  try {
+    await action();
+  } catch (error) {
+    actionError = error;
+  } finally {
+    page.off('dialog', onDialog);
+  }
+  expect(dialogs).toEqual([]);
+  if (actionError) throw actionError;
+}
+
+test('Import confirm is skipped when the saved CV is blank', async ({ page }) => {
+  await openApp(page);
+  await page.getByRole('button', { name: /Start a new CV/ }).click();
+  await expect(page.getByLabel('Full name')).toBeVisible();
+  await expectBlankSavedCv(page);
+  await importWithoutDialog(page, async () => {
+    await page.locator('#importInput').setInputFiles({
+      name: 'blank-replace.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(validBackup))
+    });
+    await expect(page.getByLabel('Full name')).toHaveValue('Recovered CV');
+  });
+
+  await page.locator('.more-menu summary').click();
+  let startNewMessage = '';
+  page.once('dialog', (dialog) => {
+    startNewMessage = dialog.message();
+    dialog.accept();
+  });
+  await page.getByRole('button', { name: 'Start new CV', exact: true }).click();
+  expect(startNewMessage).toBe('Starting a new CV will replace the current CV. Continue?');
+  await expect(page.getByLabel('Full name')).toHaveValue('');
+  await expectBlankSavedCv(page);
+  await importWithoutDialog(page, async () => {
+    await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
+    await expect(page.getByLabel('Full name')).toHaveValue('Jordan Ellis');
+  });
+});
+
+test('Import confirm for unreadable saved data does not mention a snapshot', async ({ page }) => {
+  const raw = '{"broken":';
+  await page.addInitScript((damaged) => localStorage.setItem('state-cv-data-v1', damaged), raw);
+  await openApp(page);
+  await expect(page.locator('#storageNotice')).toContainText('Saved data could not be validated');
+  let message = '';
+  page.once('dialog', (dialog) => {
+    message = dialog.message();
+    dialog.accept();
+  });
+  await page.locator('#importInput').setInputFiles({
+    name: 'recovery.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(validBackup))
+  });
+  await expect(page.getByLabel('Full name')).toHaveValue('Recovered CV');
+  expect(message).toBe(unreadableCvMessage);
+});
+
+test('Import confirm for a saved CV keeps the snapshot wording', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Keep Me');
+  await expect.poll(() => savedName(page)).toBe('Keep Me');
+  let pdfMessage = '';
+  page.once('dialog', (dialog) => {
+    pdfMessage = dialog.message();
+    dialog.dismiss();
+  });
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
+  await expect(page.locator('#saveStatus')).toContainText('Import cancelled');
+  expect(pdfMessage).toBe(savedCvMessage);
+  await expect(page.getByLabel('Full name')).toHaveValue('Keep Me');
+  let jsonMessage = '';
+  page.once('dialog', (dialog) => {
+    jsonMessage = dialog.message();
+    dialog.dismiss();
+  });
+  await page.locator('#importInput').setInputFiles({
+    name: 'keep.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(validBackup))
+  });
+  await expect.poll(() => jsonMessage).toBe(savedCvMessage);
+  await expect(page.getByLabel('Full name')).toHaveValue('Keep Me');
+});
+
 const allowedOutsideLinks = [
   'https://nativestatetools.com/',
   'https://github.com/native-state-tools/state-cv'
@@ -1262,15 +1379,48 @@ test('Landing page and app both load offline from the service worker', async ({ 
 });
 
 test('Landing: /app without a slash redirects to /app/', async ({ page }) => {
-  const response = await page.request.get('/app');
-  expect(response.url()).toMatch(/\/app\/$/);
-  expect(response.ok()).toBeTruthy();
   await page.goto('/app/');
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), { timeout: 15000 }).toBe(true);
-  await page.goto('/app');
-  await expect(page).toHaveURL(/\/app\/$/);
-  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+  await page.context().setOffline(true);
+  try {
+    await page.goto('/app');
+    await expect(page).toHaveURL(/\/app\/$/);
+    await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+    await page.goto('/app?x=1');
+    await expect(page).toHaveURL(/\/app\/\?x=1$/);
+    await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+});
+
+test('Landing: a deeper URL does not fall back to a cached page', async ({ page }) => {
+  await page.goto('/app/');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), { timeout: 15000 }).toBe(true);
+  await page.context().setOffline(true);
+  try {
+    for (const deeperPath of ['/nope/deeper', '/app/nope']) {
+      let navigationError = null;
+      try {
+        await page.goto(deeperPath);
+      } catch (error) {
+        navigationError = error;
+      }
+      expect(navigationError, deeperPath).toBeTruthy();
+      expect(String(navigationError), deeperPath).toMatch(/ERR_INTERNET_DISCONNECTED|ERR_FAILED|net::/i);
+      const showsLanding = await page.getByRole('heading', { name: 'Build your CV. Keep it yours.' }).count().catch(() => 0);
+      const showsApp = await page.getByRole('button', { name: /Continue/ }).count().catch(() => 0);
+      expect(showsLanding, deeperPath).toBe(0);
+      expect(showsApp, deeperPath).toBe(0);
+    }
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await page.goto('/app/');
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
 });
 
 test('Landing page opens from file://', async ({ page }, testInfo) => {
