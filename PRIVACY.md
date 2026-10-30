@@ -10,6 +10,8 @@ The landing page is the site root, and the app is at `/app/`. State CV now lives
 
 - **No analytics or tracking.** The application contains no telemetry, cookies for tracking, or third-party analytics of any kind. A Content Security Policy blocks all external connections at the browser level.
 
+- The Support link opens Ko-fi's website in a new tab. State CV itself sends nothing to Ko-fi, and your CV never leaves your device.
+
 - **App updates.** On supported browsers, State CV checks for and downloads app-shell updates from the same origin as the app. These requests contain no CV content, identifiers, or usage data. Opening `app/index.html` directly from the file system does not register a service worker. The landing page at the site root has no scripts.
 
 - **Storage is browser-local.** Drafts remain under the existing `state-cv-data-v1` key and include a revision for detecting conflicting edits in another tab. State CV keeps up to five recent local snapshots under `state-cv-snapshots-v1`, and copies an invalid saved value unchanged to `state-cv-damaged-v1` before reporting the issue. The result of the browser-persistence request is stored locally under `state-cv-persistence-v1`. Saving damaged data stays blocked until you import a JSON backup or explicitly start a new CV; the damaged copy is not removed automatically.
@@ -31,3 +33,7 @@ The landing page is the site root, and the app is at `/app/`. State CV now lives
 This policy applies to the application at this repository and its hosted version.
 
 The app makes same-origin requests only for its static files and service-worker updates. Visiting this project page is a separate interaction with the hosting server.
+
+## Contact
+
+[hello@nativestatetools.com](mailto:hello@nativestatetools.com)

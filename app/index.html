@@ -55,7 +55,7 @@
         <button class="launch-card" id="newCvButton" type="button"><span class="launch-card-icon">＋</span><span><strong>Start a new CV</strong><small>Begin with a clean workspace</small></span><span class="launch-card-arrow">→</span></button>
         <button class="launch-card" id="launchImportButton" type="button"><span class="launch-card-icon launch-pdf-icon">PDF</span><span><strong>Import a PDF</strong><small>Extract your existing CV</small></span><span class="launch-card-arrow">→</span></button>
       </div>
-      <p class="launch-footnote"><span class="workspace-pulse"></span> Your data stays in this browser <a class="about-link" href="../about.html">About and privacy</a></p>
+      <p class="launch-footnote"><span class="workspace-pulse"></span> Your data stays in this browser <span class="launch-footnote-links"><a class="about-link" href="../about.html">About and privacy</a><a class="about-link" href="https://ko-fi.com/nativestatetools" rel="noopener noreferrer" target="_blank">Support State CV</a></span></p>
     </div>
   </section>
   <div class="app-shell" id="appShell" inert>
@@ -81,6 +81,7 @@
             <label class="paper-size-control" title="Choose PDF text size"><span>Text size</span><select id="textSize"><option value="compact">Compact (9 pt)</option><option value="standard" selected>Standard (10.5 pt)</option><option value="large">Large (12 pt)</option></select></label>
             <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" enterkeyhint="done" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
             <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
+            <a class="about-link" href="https://ko-fi.com/nativestatetools" rel="noopener noreferrer" target="_blank">Support State CV</a>
           </div>
         </details>
         <input id="importInput" type="file" accept="application/json,.json,application/pdf,.pdf" hidden />
@@ -167,7 +168,7 @@
       <div><dt>App version</dt><dd id="dataAppVersion">Checking…</dd></div>
     </dl>
     <p class="data-dialog-note">Storage behavior can differ when opening index.html directly from your device; this does not imply the same behavior as the hosted site.</p>
-    <p class="data-dialog-note"><a class="about-link" href="../about.html">About and privacy</a></p>
+    <p class="data-dialog-note"><a class="about-link" href="../about.html">About and privacy</a> <a class="about-link" href="https://ko-fi.com/nativestatetools" rel="noopener noreferrer" target="_blank">Support State CV</a></p>
     <section class="data-snapshots" aria-labelledby="snapshotsTitle">
       <h3 id="snapshotsTitle">Recent snapshots</h3>
       <p id="snapshotsEmpty">No snapshots yet.</p>

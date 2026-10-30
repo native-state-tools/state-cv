@@ -6,7 +6,8 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const ALLOWED_ANCHOR_HREFS = new Set([
   'https://nativestatetools.com/',
-  'https://github.com/native-state-tools/state-cv'
+  'https://github.com/native-state-tools/state-cv',
+  'https://ko-fi.com/nativestatetools'
 ]);
 
 function withoutAllowedAnchors(text) {
@@ -81,7 +82,8 @@ function selfTest() {
   const safeSamples = [
     'fetch("/local.json"); node.textContent = value;',
     '<a href="https://nativestatetools.com/" rel="noreferrer">Native State Tools</a>',
-    '<a href="https://github.com/native-state-tools/state-cv" rel="noreferrer">Source code</a>'
+    '<a href="https://github.com/native-state-tools/state-cv" rel="noreferrer">Source code</a>',
+    '<a href="https://ko-fi.com/nativestatetools" rel="noopener noreferrer" target="_blank">Support State CV</a>'
   ];
   safeSamples.forEach((sample) => {
     assert.equal(matchingRules(sample).length, 0, `Expected a local-safe sample to pass: ${sample}`);

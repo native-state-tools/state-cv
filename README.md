@@ -8,6 +8,8 @@ State CV now lives at https://cv.nativestatetools.com/ (app at https://cv.native
 
 [Landing page](https://cv.nativestatetools.com/) · [Open the app](https://cv.nativestatetools.com/app/) · [About and privacy](https://cv.nativestatetools.com/about.html)
 
+Contact: [hello@nativestatetools.com](mailto:hello@nativestatetools.com)
+
 ![State CV editor and preview after importing a CV](docs/screenshot.png)
 
 ## How to use
