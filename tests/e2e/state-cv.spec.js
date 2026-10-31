@@ -56,6 +56,20 @@ async function enterEditor(page) {
   await expect(page.getByLabel('Full name')).toBeVisible();
 }
 
+const sectionHeadings = {
+  Contact: 'Contact details',
+  Summary: 'Professional summary',
+  Experience: 'Experience',
+  Education: 'Education',
+  Skills: 'Skills'
+};
+
+async function openSection(page, name) {
+  const button = page.locator('.section-nav').getByRole('button', { name: new RegExp(`(^|\\s)${name}(, complete)?$`) });
+  await button.click();
+  await expect(page.getByRole('heading', { level: 2, name: sectionHeadings[name], exact: true })).toBeVisible();
+}
+
 async function openDataDialog(page) {
   await page.locator('.more-menu summary').click();
   await page.getByRole('button', { name: 'Your data' }).click();
@@ -202,6 +216,134 @@ test('viewport layout has no horizontal overflow and the bottom bar matches the 
   else await expect(bottomBar).toBeHidden();
 });
 
+test('only one editor section is visible and hidden sections are inert', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  const readSections = () => page.locator('.form-section').evaluateAll((sections) => sections.map((section) => ({
+    id: section.dataset.editorSection,
+    hidden: section.hidden,
+    inert: section.inert
+  })));
+  const expectOnly = async (activeId) => {
+    const sections = await readSections();
+    expect(sections.map((section) => section.id)).toEqual(['contact', 'summary', 'experience', 'education', 'skills']);
+    expect(sections.filter((section) => !section.hidden && !section.inert).map((section) => section.id)).toEqual([activeId]);
+    expect(sections.filter((section) => section.hidden && section.inert)).toHaveLength(4);
+  };
+  await expectOnly('contact');
+  await openSection(page, 'Education');
+  await expectOnly('education');
+  await expect(page.getByLabel('Full name')).toBeHidden();
+
+  await openSection(page, 'Skills');
+  await page.locator('#importInput').setInputFiles({
+    name: 'section-return.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(validBackup))
+  });
+  await expect(page.getByLabel('Full name')).toBeVisible();
+  await expect(page.getByLabel('Full name')).toHaveValue('Recovered CV');
+  await expectOnly('contact');
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('.more-menu summary').click();
+  await page.getByRole('button', { name: 'Start new CV', exact: true }).click();
+  await expect(page.getByLabel('Full name')).toHaveValue('');
+  await expectOnly('contact');
+});
+
+test('Next and Back move through every editor section and focus the heading', async ({ page, isMobile }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await expect(page.locator('[data-editor-section="contact"] [data-section-back]')).toBeHidden();
+  for (const name of ['Professional summary', 'Experience', 'Education', 'Skills']) {
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 2, name, exact: true })).toBeFocused();
+  }
+  const skillsNext = page.locator('[data-editor-section="skills"] [data-section-next]');
+  if (isMobile) {
+    const label = await skillsNext.evaluate((node) => node.innerText.replace(/\s+/g, ' ').trim());
+    expect(label).toBe('Preview');
+  } else {
+    await expect(skillsNext).toBeHidden();
+  }
+  for (const name of ['Education', 'Experience', 'Professional summary', 'Contact details']) {
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 2, name, exact: true })).toBeFocused();
+  }
+  await expect(page.locator('[data-editor-section="contact"] [data-section-back]')).toBeHidden();
+  if (isMobile) {
+    for (let step = 0; step < 4; step += 1) {
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
+    }
+    await skillsNext.click();
+    await expect(page.locator('#appShell')).toHaveAttribute('data-mobile-view', 'preview');
+    await expect(page.locator('#previewPanel')).toBeVisible();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 2, name: 'Skills', exact: true })).toBeVisible();
+  }
+});
+
+test('a section check mark appears after the section is filled', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  const contactCheck = page.locator('[data-section-check="contact"]');
+  await expect(contactCheck).toBeHidden();
+  await page.getByLabel('Full name').fill('Alex Morgan');
+  await page.getByLabel('Professional title').fill('Designer');
+  await expect(contactCheck).toBeHidden();
+  await page.getByLabel('Email').fill('alex@example.com');
+  await expect(contactCheck).toBeVisible();
+  await expect(page.locator('.section-nav').getByRole('button', { name: /Contact, complete$/ })).toBeVisible();
+  await openSection(page, 'Experience');
+  const experienceCheck = page.locator('[data-section-check="experience"]');
+  await expect(experienceCheck).toBeHidden();
+  await page.getByLabel('Company').fill('Northstar Labs');
+  await expect(experienceCheck).toBeVisible();
+});
+
+test('desktop section sidebar collapse toggle works', async ({ page, isMobile }) => {
+  await openApp(page);
+  await enterEditor(page);
+  const toggle = page.locator('#sectionNavToggle');
+  if (isMobile) {
+    await expect(toggle).toBeHidden();
+    return;
+  }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.section-nav-name', { hasText: 'Experience' })).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveText('Expand sections');
+  await expect(page.locator('.section-nav-name', { hasText: 'Experience' })).toBeHidden();
+  await expect(page.locator('.section-nav-number', { hasText: '03' })).toBeVisible();
+  await page.locator('.section-nav').getByRole('button', { name: /Summary$/ }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Professional summary', exact: true })).toBeFocused();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.section-nav-name', { hasText: 'Summary' })).toBeVisible();
+  await page.reload();
+  await enterEditor(page);
+  await expect(page.locator('#sectionNavToggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.section-nav-name', { hasText: 'Contact' })).toBeVisible();
+});
+
+test('phone-360 section tab row is visible and the bottom bar keeps Edit, Preview, and Export', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone-360', 'This check is the 360px phone layout');
+  await openApp(page);
+  await enterEditor(page);
+  const tabs = page.locator('.section-nav');
+  await expect(tabs).toBeVisible();
+  for (const name of ['Contact', 'Summary', 'Experience', 'Education', 'Skills']) {
+    await expect(tabs.getByRole('button', { name: new RegExp(`(^|\\s)${name}$`) })).toBeVisible();
+  }
+  const bar = page.locator('nav[aria-label="Editor navigation"]');
+  await expect(bar.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  await expect(bar.getByRole('button', { name: 'Preview', exact: true })).toBeVisible();
+  await expect(bar.locator('#mobileExportButton')).toHaveText('Export');
+  await expect(bar.locator('#mobileExportButton')).toBeVisible();
+});
+
 test('edited fields persist after reload', async ({ page }) => {
   await openApp(page);
   await enterEditor(page);
@@ -333,9 +475,11 @@ test('contact fields use mobile-appropriate types and autofill hints', async ({ 
   await expect(page.getByLabel('LinkedIn or portfolio')).toHaveAttribute('inputmode', 'url');
   await expect(page.getByLabel('LinkedIn or portfolio')).toHaveAttribute('autocomplete', 'url');
 
+  await openSection(page, 'Experience');
   await page.getByRole('button', { name: 'Add experience' }).click();
-  await page.getByRole('button', { name: 'Add education' }).click();
   await expect(page.getByRole('button', { name: 'Remove experience entry 2' })).toBeVisible();
+  await openSection(page, 'Education');
+  await page.getByRole('button', { name: 'Add education' }).click();
   await expect(page.getByRole('button', { name: 'Remove education entry 2' })).toBeVisible();
   const repeatedTypes = await page.locator('#experienceList input, #educationList input').evaluateAll((fields) =>
     fields.map((field) => field.type)
@@ -357,21 +501,25 @@ test('editor controls use at least 16px computed text', async ({ page }) => {
 test('coarse-pointer repeat-entry controls have distinct 44px targets', async ({ page, isMobile }) => {
   await openApp(page);
   await enterEditor(page);
+  await openSection(page, 'Experience');
   await page.getByRole('button', { name: 'Add experience' }).click();
-  await page.getByRole('button', { name: 'Add education' }).click();
   const repeatPaddingTop = await page.locator('.repeat-item').first().evaluate((element) => getComputedStyle(element).paddingTop);
   console.log(`Repeat-entry top padding at ${isMobile ? 'phone' : 'desktop'} viewport: ${repeatPaddingTop}`);
-  const targets = [
-    page.getByRole('button', { name: 'Remove experience entry 2' }),
-    page.getByRole('button', { name: 'Remove education entry 2' })
-  ];
-  for (const target of targets) {
-    await expect(target).toBeVisible();
-    if (isMobile) {
-      const box = await target.boundingBox();
-      expect(box.width).toBeGreaterThanOrEqual(44);
-      expect(box.height).toBeGreaterThanOrEqual(44);
-    }
+  const experienceRemove = page.getByRole('button', { name: 'Remove experience entry 2' });
+  await expect(experienceRemove).toBeVisible();
+  if (isMobile) {
+    const experienceBox = await experienceRemove.boundingBox();
+    expect(experienceBox.width).toBeGreaterThanOrEqual(44);
+    expect(experienceBox.height).toBeGreaterThanOrEqual(44);
+  }
+  await openSection(page, 'Education');
+  await page.getByRole('button', { name: 'Add education' }).click();
+  const educationRemove = page.getByRole('button', { name: 'Remove education entry 2' });
+  await expect(educationRemove).toBeVisible();
+  if (isMobile) {
+    const educationBox = await educationRemove.boundingBox();
+    expect(educationBox.width).toBeGreaterThanOrEqual(44);
+    expect(educationBox.height).toBeGreaterThanOrEqual(44);
   }
 });
 
@@ -476,24 +624,33 @@ test('keyboard Tab reaches the editor and navigation controls', async ({ page, i
   await openApp(page);
   await enterEditor(page);
   await page.locator('#brandHome').focus();
-  const targets = new Set(['importButton', 'addExperience', 'addEducation']);
+  const shellTargets = new Set(['importButton']);
   if (isMobile) {
-    targets.add('mobileExportButton');
-    targets.add('edit');
-    targets.add('preview');
+    shellTargets.add('mobileExportButton');
+    shellTargets.add('edit');
+    shellTargets.add('preview');
   } else {
-    targets.add('printButton');
+    shellTargets.add('printButton');
   }
-  const reached = new Set();
-  for (let index = 0; index < 80 && reached.size < targets.size; index += 1) {
-    await page.keyboard.press('Tab');
-    const active = await page.evaluate(() => {
-      const element = document.activeElement;
-      return element.dataset.mobileViewButton || element.id;
-    });
-    if (targets.has(active)) reached.add(active);
-  }
-  expect([...reached].sort()).toEqual([...targets].sort());
+  const tabUntil = async (targets) => {
+    const reached = new Set();
+    for (let index = 0; index < 80 && reached.size < targets.size; index += 1) {
+      await page.keyboard.press('Tab');
+      const active = await page.evaluate(() => {
+        const element = document.activeElement;
+        return element.dataset.mobileViewButton || element.id;
+      });
+      if (targets.has(active)) reached.add(active);
+    }
+    expect([...reached].sort()).toEqual([...targets].sort());
+  };
+  await tabUntil(shellTargets);
+  await openSection(page, 'Experience');
+  await page.locator('#brandHome').focus();
+  await tabUntil(new Set(['addExperience']));
+  await openSection(page, 'Education');
+  await page.locator('#brandHome').focus();
+  await tabUntil(new Set(['addEducation']));
 });
 
 test('WCAG contrast for text, controls, focus, links, placeholders, and notices meets thresholds', async ({ page }) => {
@@ -788,7 +945,9 @@ test('ATS tips drop the missing email after the fields are filled and the count 
   await page.getByLabel('Full name').fill('Alex Morgan');
   await page.getByLabel('Email').fill('alex@example.com');
   await page.getByLabel('Phone').fill('(555) 123-4567');
+  await openSection(page, 'Summary');
   await page.getByLabel(/^Summary/).fill('Builds clear tools for operations teams.');
+  await openSection(page, 'Skills');
   await page.getByLabel(/^Skills/).fill('Figma, research');
   await expect(page.locator('#atsTipsList')).toHaveText('No ATS issues found.');
   await expect(page.locator('#atsTipsList')).not.toContainText('Add your email.');
@@ -812,6 +971,7 @@ test('service worker controls the app and supports an offline reload', async ({ 
 test('Undo restores a removed experience entry and keeps it after reload', async ({ page }) => {
   await openApp(page);
   await enterEditor(page);
+  await openSection(page, 'Experience');
   await page.getByLabel('Job title').fill('Kept this role');
   await page.getByRole('button', { name: 'Remove experience entry 1' }).click();
   const toast = page.locator('#undoToast');
@@ -833,18 +993,23 @@ test('Undo restores a removed experience entry and keeps it after reload', async
   })).toBe('Kept this role');
   await page.reload();
   await enterEditor(page);
+  await openSection(page, 'Experience');
   await expect(page.getByLabel('Job title')).toHaveValue('Kept this role');
 });
 
 test('Undo toast disappears when a second removal replaces it and restores that entry', async ({ page }) => {
   await openApp(page);
   await enterEditor(page);
+  await openSection(page, 'Experience');
   await page.getByLabel('Job title').fill('Alpha Role');
+  await openSection(page, 'Education');
   await page.getByLabel('Degree or credential').fill('Beta Degree');
+  await openSection(page, 'Experience');
   await page.getByRole('button', { name: 'Remove experience entry 1' }).click();
   const toast = page.locator('#undoToast');
   await expect(toast).toBeVisible();
   await expect(toast).toContainText('Experience entry removed');
+  await openSection(page, 'Education');
   await page.getByRole('button', { name: 'Remove education entry 1' }).click();
   await expect(toast).toBeVisible();
   await expect(toast).toContainText('Education entry removed');
@@ -853,6 +1018,7 @@ test('Undo toast disappears when a second removal replaces it and restores that 
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByLabel('Degree or credential')).toHaveValue('Beta Degree');
   await expect(page.getByLabel('Degree or credential')).toBeFocused();
+  await openSection(page, 'Experience');
   await expect(page.getByLabel('Job title')).toHaveValue('');
   await expect(toast).toBeHidden();
 });
@@ -1134,6 +1300,7 @@ async function expectImportedFixture(page, { companies, skills }) {
   await expect(page.getByLabel('Phone')).toHaveValue('(512) 555-0147');
   await expect(page.getByLabel('Location')).toHaveValue('Austin, TX');
 
+  await openSection(page, 'Experience');
   const experience = page.locator('#experienceList article');
   await expect(experience).toHaveCount(3);
   for (let index = 0; index < fixtureJobs.length; index += 1) {
@@ -1145,12 +1312,14 @@ async function expectImportedFixture(page, { companies, skills }) {
     expect(highlights.split(/\n/).filter((line) => line.trim())).toHaveLength(fixtureJobs[index][2]);
   }
 
+  await openSection(page, 'Education');
   const education = page.locator('#educationList article');
   await expect(education).toHaveCount(1);
   await expect(education.getByLabel('Degree or credential')).toHaveValue('B.S., Supply Chain Management');
   await expect(education.getByLabel('School')).toHaveValue('University of Texas at Austin');
   await expect(education.getByLabel('Dates')).toHaveValue('2012 \u2013 2016');
 
+  await openSection(page, 'Skills');
   const importedSkills = (await page.getByLabel(/^Skills/).inputValue()).split(',').map((skill) => skill.trim()).filter(Boolean);
   expect(importedSkills).toEqual(skills);
   expect(importedSkills).toHaveLength(8);

@@ -90,7 +90,19 @@
     </header>
 
     <main class="workspace">
-      <section class="editor-panel" aria-label="CV editor">
+      <section class="editor-panel" aria-label="CV editor" data-sections-collapsed="false">
+        <div class="editor-body">
+          <nav class="section-nav" aria-label="CV sections">
+            <button class="section-nav-toggle button button-ghost" id="sectionNavToggle" type="button" aria-expanded="true" aria-controls="sectionNavList"><span class="section-nav-toggle-text">Collapse sections</span></button>
+            <ol class="section-nav-list" id="sectionNavList">
+              <li><button class="section-nav-item" type="button" data-section-target="contact" aria-current="step" aria-label="01. Contact"><span class="section-nav-number">01</span><span class="section-nav-name">Contact</span><span class="section-nav-check" data-section-check="contact" hidden>✓</span></button></li>
+              <li><button class="section-nav-item" type="button" data-section-target="summary" aria-label="02. Summary"><span class="section-nav-number">02</span><span class="section-nav-name">Summary</span><span class="section-nav-check" data-section-check="summary" hidden>✓</span></button></li>
+              <li><button class="section-nav-item" type="button" data-section-target="experience" aria-label="03. Experience"><span class="section-nav-number">03</span><span class="section-nav-name">Experience</span><span class="section-nav-check" data-section-check="experience" hidden>✓</span></button></li>
+              <li><button class="section-nav-item" type="button" data-section-target="education" aria-label="04. Education"><span class="section-nav-number">04</span><span class="section-nav-name">Education</span><span class="section-nav-check" data-section-check="education" hidden>✓</span></button></li>
+              <li><button class="section-nav-item" type="button" data-section-target="skills" aria-label="05. Skills"><span class="section-nav-number">05</span><span class="section-nav-name">Skills</span><span class="section-nav-check" data-section-check="skills" hidden>✓</span></button></li>
+            </ol>
+          </nav>
+          <div class="editor-main">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">CV builder <span class="eyebrow-rule"></span> Private by default</p>
@@ -110,8 +122,8 @@
         </details>
 
         <form id="resumeForm" autocomplete="off">
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">01</span><div><h2>Contact details</h2><p>The essentials recruiters look for first.</p></div></div>
+          <section class="form-section" data-editor-section="contact">
+            <div class="section-heading"><span class="section-number">01</span><div><h2 tabindex="-1">Contact details</h2><p>The essentials recruiters look for first.</p></div></div>
             <div class="form-grid">
               <label class="field field-wide"><span>Full name</span><input data-path="basics.name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Alex Morgan" /></label>
               <label class="field"><span>Professional title</span><input data-path="basics.title" type="text" autocomplete="organization-title" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Product Designer" /></label>
@@ -120,28 +132,35 @@
               <label class="field"><span>Phone</span><input data-path="basics.phone" type="tel" inputmode="tel" autocomplete="tel" autocapitalize="off" spellcheck="false" enterkeyhint="next" maxlength="40" placeholder="(555) 123-4567" /></label>
               <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" type="url" inputmode="url" autocomplete="url" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="300" placeholder="linkedin.com/in/alexmorgan" /></label>
             </div>
+            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back hidden>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
           </section>
 
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">02</span><div><h2>Professional summary</h2><p>Two to four lines that frame your value.</p></div></div>
+          <section class="form-section" data-editor-section="summary" hidden inert>
+            <div class="section-heading"><span class="section-number">02</span><div><h2 tabindex="-1">Professional summary</h2><p>Two to four lines that frame your value.</p></div></div>
             <label class="field"><span>Summary <b class="character-count" id="summaryCount">0 / 500</b></span><textarea data-path="summary" enterkeyhint="enter" maxlength="500" rows="5" placeholder="Product designer with 6+ years turning complex workflows into clear, useful experiences. Known for pairing thoughtful research with fast, measurable execution."></textarea></label>
+            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
           </section>
 
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">03</span><div><h2>Experience</h2><p>Lead with impact. Start bullets with strong verbs.</p></div><button class="icon-button" id="addExperience" type="button" title="Add experience" aria-label="Add experience">+</button></div>
+          <section class="form-section" data-editor-section="experience" hidden inert>
+            <div class="section-heading"><span class="section-number">03</span><div><h2 tabindex="-1">Experience</h2><p>Lead with impact. Start bullets with strong verbs.</p></div><button class="icon-button" id="addExperience" type="button" title="Add experience" aria-label="Add experience">+</button></div>
             <div id="experienceList" class="repeat-list"></div>
+            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
           </section>
 
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">04</span><div><h2>Education</h2><p>Include your most relevant credentials.</p></div><button class="icon-button" id="addEducation" type="button" title="Add education" aria-label="Add education">+</button></div>
+          <section class="form-section" data-editor-section="education" hidden inert>
+            <div class="section-heading"><span class="section-number">04</span><div><h2 tabindex="-1">Education</h2><p>Include your most relevant credentials.</p></div><button class="icon-button" id="addEducation" type="button" title="Add education" aria-label="Add education">+</button></div>
             <div id="educationList" class="repeat-list"></div>
+            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
           </section>
 
-          <section class="form-section">
-            <div class="section-heading"><span class="section-number">05</span><div><h2>Skills</h2><p>Use the language of your target role.</p></div></div>
+          <section class="form-section" data-editor-section="skills" hidden inert>
+            <div class="section-heading"><span class="section-number">05</span><div><h2 tabindex="-1">Skills</h2><p>Use the language of your target role.</p></div></div>
             <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" type="text" enterkeyhint="done" maxlength="2000" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
+            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next><span class="section-next-word">Next</span><span class="section-preview-word">Preview</span></button></div>
           </section>
         </form>
+          </div>
+        </div>
       </section>
 
       <aside class="preview-panel" id="previewPanel" aria-label="CV preview">

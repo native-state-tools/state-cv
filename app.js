@@ -595,6 +595,8 @@ function undoEntryRemoval() {
   updateCompletion();
   scheduleSave();
   const listId = pending.list === 'experience' ? 'experienceList' : 'educationList';
+  const sectionId = pending.list === 'experience' ? 'experience' : 'education';
+  showEditorSection(sectionId);
   const entry = document.querySelectorAll(`#${listId} .repeat-item`)[restoredIndex];
   const field = entry ? entry.querySelector('input, textarea') : null;
   if (field) field.focus();
@@ -1056,14 +1058,78 @@ function updatePreview({ force = false } = {}) {
   }
 }
 
+const EDITOR_SECTIONS = ['contact', 'summary', 'experience', 'education', 'skills'];
+const EDITOR_SECTION_LABELS = {
+  contact: '01. Contact',
+  summary: '02. Summary',
+  experience: '03. Experience',
+  education: '04. Education',
+  skills: '05. Skills'
+};
+
+function getSectionStatus(data) {
+  const source = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  const basics = source.basics && typeof source.basics === 'object' && !Array.isArray(source.basics) ? source.basics : {};
+  const textFilled = (value) => typeof value === 'string' && value.trim() !== '';
+  const list = (value) => (Array.isArray(value) ? value : []);
+  return {
+    contact: textFilled(basics.name) && textFilled(basics.title) && textFilled(basics.email),
+    summary: textFilled(source.summary),
+    experience: list(source.experience).some((item) => item && typeof item === 'object' && (textFilled(item.role) || textFilled(item.company))),
+    education: list(source.education).some((item) => item && typeof item === 'object' && (textFilled(item.degree) || textFilled(item.school))),
+    skills: textFilled(source.skills)
+  };
+}
+
 function updateCompletion() {
+  const status = getSectionStatus(resumeData);
   const values = [resumeData.basics.name, resumeData.basics.title, resumeData.basics.email, resumeData.summary, resumeData.experience.some((item) => item.role || item.company), resumeData.education.some((item) => item.degree || item.school), resumeData.skills];
   const percent = Math.round((values.filter(Boolean).length / values.length) * 100);
   document.querySelector('#completionPercent').textContent = `${percent}%`;
   document.querySelector('#completionLabel').textContent = percent === 100 ? 'Ready to send' : percent >= 70 ? 'Looking strong' : 'Add your details';
   const progress = Math.min(100, Math.round(percent / 25) * 25);
   document.querySelector('#completionRing').className = `completion-ring progress-${progress}`;
+  updateSectionChecks(status);
   renderAtsTips();
+}
+
+function updateSectionChecks(status) {
+  EDITOR_SECTIONS.forEach((id) => {
+    const complete = Boolean(status && status[id]);
+    const mark = document.querySelector(`[data-section-check="${id}"]`);
+    if (mark) mark.hidden = !complete;
+    const button = document.querySelector(`[data-section-target="${id}"]`);
+    if (button) button.setAttribute('aria-label', complete ? `${EDITOR_SECTION_LABELS[id]}, complete` : EDITOR_SECTION_LABELS[id]);
+  });
+}
+
+function showEditorSection(sectionId, { focusHeading = false } = {}) {
+  const nextId = EDITOR_SECTIONS.includes(sectionId) ? sectionId : 'contact';
+  document.querySelectorAll('[data-editor-section]').forEach((section) => {
+    const active = section.dataset.editorSection === nextId;
+    section.hidden = !active;
+    section.inert = !active;
+  });
+  document.querySelectorAll('[data-section-target]').forEach((button) => {
+    if (button.dataset.sectionTarget === nextId) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  });
+  const section = document.querySelector(`[data-editor-section="${nextId}"]`);
+  if (!section) return;
+  const heading = section.querySelector('h2');
+  if (focusHeading && heading) heading.focus({ preventScroll: true });
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  section.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+
+function setSectionNavCollapsed(collapsed) {
+  const panel = document.querySelector('.editor-panel');
+  if (panel) panel.dataset.sectionsCollapsed = collapsed ? 'true' : 'false';
+  const toggle = document.querySelector('#sectionNavToggle');
+  if (!toggle) return;
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  const label = toggle.querySelector('.section-nav-toggle-text');
+  if (label) label.textContent = collapsed ? 'Expand sections' : 'Collapse sections';
 }
 
 function renderAtsTips() {
@@ -1178,6 +1244,7 @@ function startNewCv({ confirmReplacement = true } = {}) {
   resumeData = structuredClone(defaultData);
   document.querySelector('#exportFilename').removeAttribute('data-edited');
   renderFields(); updatePreview(); updateCompletion();
+  showEditorSection('contact');
   const saved = saveData({ force: storageLoadFailed || storageDamaged });
   if (saved) closeLaunchScreen();
 }
@@ -1228,7 +1295,35 @@ document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
 });
 document.querySelector('#mobileExportButton').addEventListener('click', () => document.querySelector('#printButton').click());
 window.addEventListener('beforeprint', () => updatePreview({ force: true }));
-window.matchMedia('(min-width: 1024px)').addEventListener('change', () => updatePreview());
+window.matchMedia('(min-width: 1024px)').addEventListener('change', (event) => {
+  updatePreview();
+  if (!event.matches) setSectionNavCollapsed(false);
+});
+document.querySelector('#sectionNavToggle').addEventListener('click', () => {
+  const expanded = document.querySelector('#sectionNavToggle').getAttribute('aria-expanded') === 'true';
+  setSectionNavCollapsed(expanded);
+});
+document.querySelectorAll('[data-section-target]').forEach((button) => {
+  button.addEventListener('click', () => showEditorSection(button.dataset.sectionTarget, { focusHeading: true }));
+});
+document.querySelectorAll('[data-section-back]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const current = button.closest('[data-editor-section]').dataset.editorSection;
+    const index = EDITOR_SECTIONS.indexOf(current);
+    if (index > 0) showEditorSection(EDITOR_SECTIONS[index - 1], { focusHeading: true });
+  });
+});
+document.querySelectorAll('[data-section-next]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const current = button.closest('[data-editor-section]').dataset.editorSection;
+    if (current === 'skills' && window.matchMedia('(max-width: 1023px)').matches) {
+      setMobileView('preview');
+      return;
+    }
+    const index = EDITOR_SECTIONS.indexOf(current);
+    if (index >= 0 && index < EDITOR_SECTIONS.length - 1) showEditorSection(EDITOR_SECTIONS[index + 1], { focusHeading: true });
+  });
+});
 document.querySelector('#desktopPreviewButton').addEventListener('click', () => {
   const button = document.querySelector('#desktopPreviewButton');
   const isHidden = document.querySelector('#appShell').dataset.previewHidden !== 'true';
@@ -1301,6 +1396,7 @@ async function handlePdfImport(file) {
     }
     takeSnapshot();
     const imported = importPdfLines(lines);
+    showEditorSection('contact');
     if (!imported.saved) {
       setImportStatus('PDF imported in this tab, but it could not be saved locally', true);
       return;
@@ -1413,6 +1509,7 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
       resumeData = normalized;
       document.querySelector('#exportFilename').removeAttribute('data-edited');
       renderFields(); updatePreview(); updateCompletion();
+      showEditorSection('contact');
       const saved = saveData({ force: storageLoadFailed || storageDamaged });
       if (saved) closeLaunchScreen();
     } catch (error) {
