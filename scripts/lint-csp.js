@@ -111,9 +111,9 @@ function lintSources() {
     const htmlPath = path.join(root, file);
     return [htmlPath, fs.readFileSync(htmlPath, 'utf8')];
   });
-  const scriptPaths = ['app.js', 'storage.js', 'sw.js'].map((file) => path.join(root, file));
+  const scriptPaths = ['app.js', 'cv-import.js', 'cv-export.js', 'storage.js', 'sw.js'].map((file) => path.join(root, file));
   const scriptSources = scriptPaths.map((file) => [file, fs.readFileSync(file, 'utf8')]);
-  const appAndStorage = scriptSources.filter(([file]) => ['app.js', 'storage.js'].includes(path.basename(file)));
+  const appAndStorage = scriptSources.filter(([file]) => ['app.js', 'cv-import.js', 'cv-export.js', 'storage.js'].includes(path.basename(file)));
 
   const findings = [];
   for (const [ruleName, pattern, description] of rules) {
@@ -139,6 +139,8 @@ function main() {
   if (process.argv.includes('--self-test')) return;
   const syntaxFiles = [
     path.join(root, 'app.js'),
+    path.join(root, 'cv-import.js'),
+    path.join(root, 'cv-export.js'),
     path.join(root, 'storage.js'),
     path.join(root, 'sw.js'),
     path.join(root, 'server.js'),

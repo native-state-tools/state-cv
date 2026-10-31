@@ -4,13 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const appSource = fs.readFileSync(path.join(__dirname, '../../app.js'), 'utf8');
+const importSource = fs.readFileSync(path.join(__dirname, '../../cv-import.js'), 'utf8');
 
 function sliceBetween(startMarker, endMarker) {
-  const start = appSource.indexOf(startMarker);
-  const end = appSource.indexOf(endMarker, start + startMarker.length);
-  assert.ok(start >= 0 && end > start, `Could not isolate ${startMarker} from app.js`);
-  return appSource.slice(start, end);
+  const start = importSource.indexOf(startMarker);
+  const end = importSource.indexOf(endMarker, start + startMarker.length);
+  assert.ok(start >= 0 && end > start, `Could not isolate ${startMarker} from cv-import.js`);
+  return importSource.slice(start, end);
 }
 
 const sandbox = vm.createContext({});
@@ -111,9 +111,12 @@ test('parseEducation keeps degree text on a row that also has dates', () => {
   ]);
 });
 
-test('inferredTitle no longer exists in app.js', () => {
-  assert.equal(appSource.includes('inferredTitle'), false);
-  assert.equal(appSource.toLowerCase().includes('logistics professional'), false);
+test('inferredTitle no longer exists in app.js, cv-import.js, or cv-export.js', () => {
+  for (const file of ['app.js', 'cv-import.js', 'cv-export.js']) {
+    const source = fs.readFileSync(path.join(__dirname, '../../', file), 'utf8');
+    assert.equal(source.includes('inferredTitle'), false, file);
+    assert.equal(source.toLowerCase().includes('logistics professional'), false, file);
+  }
 });
 
 test('date pattern reads month, numeric, and to ranges', () => {
