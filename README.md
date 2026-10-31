@@ -45,7 +45,7 @@ npm run test:e2e
 
 - Live ATS-friendly CV preview
 - Local autosave with revision checks for multi-tab edits and up to five recent recovery snapshots
-- Undo brings back a removed experience or education entry
+- Experience and education entries are cards you can collapse, expand, and reorder with buttons. Removing an entry can be undone
 - A **Your data** dialog with the last-save time, approximate storage size, persistence request result and live browser status, snapshot restore, backup download, damaged-data download, and two-step clear
 - JSON import and export for backup (imports up to 2 MB); backups are versioned and validated before use
 - PDF import with local selectable-text extraction (up to 10 MB and 20 pages); parsing disables scripting and eval features and stops after 30 seconds
@@ -55,7 +55,7 @@ npm run test:e2e
 - ATS tips panel runs locally in the browser and sends nothing anywhere
 - Backup reminders are stored only in this browser and contain no CV content
 - About and privacy page explains what stays in this browser and how to remove it. The same policy is in [PRIVACY.md](PRIVACY.md)
-- The editor shows one section at a time (Contact, Summary, Experience, Education, Skills). Wide screens use a collapsible section list beside the form; narrower screens use a section tab row. CV strength and ATS tips stay above the form. Screens narrower than 1024px still use the Edit | Preview | Export bottom bar and a full-screen preview
+- The editor shows one section at a time (Contact, Summary, Experience, Education, Skills). Wide screens use a collapsible section list beside the form; narrower screens use a section tab row that stays at the top while you scroll. CV strength and ATS tips stay above the form. Screens narrower than 1024px still use the Edit | Preview | Export bottom bar and a full-screen preview
 - No account or external service required
 
 PDF import reads selectable text in the browser and maps common contact, summary, experience, education, and skills headings into the editor. It supports common single-column layouts, separate or combined role/company/date lines, numeric dates, month-name dates, and several heading variations. Image-only or scanned PDFs need OCR before they can be imported; heavily designed multi-column PDFs may still need a quick manual review because PDF text order is not standardized.

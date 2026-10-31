@@ -103,62 +103,62 @@
             </ol>
           </nav>
           <div class="editor-main">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">CV builder <span class="eyebrow-rule"></span> Private by default</p>
-            <h1>Build a CV<br /><em>that gets read.</em></h1>
-          </div>
-          <div class="completion-widget">
-            <div class="completion-ring" id="completionRing"><strong id="completionPercent">0%</strong></div>
-            <div><span>CV strength</span><small id="completionLabel">Add your details</small></div>
-          </div>
-        </div>
-
-        <div class="quick-actions"><button class="quick-action" id="importPdfButton" type="button"><span class="quick-icon">PDF</span><span><strong>Start from a PDF</strong><small>Extract your existing CV</small></span><span class="quick-arrow">↗</span></button><div class="ats-note"><span class="note-icon">✦</span><div><strong>ATS-ready by default</strong><p>Clean hierarchy and standard headings keep your story readable by screening software.</p></div></div></div>
-
-        <details id="atsTips" class="ats-tips" open>
-          <summary>ATS tips <span id="atsTipsCount" class="ats-tips-count" aria-live="polite"></span></summary>
-          <ul id="atsTipsList"></ul>
-        </details>
-
-        <form id="resumeForm" autocomplete="off">
-          <section class="form-section" data-editor-section="contact">
-            <div class="section-heading"><span class="section-number">01</span><div><h2 tabindex="-1">Contact details</h2><p>The essentials recruiters look for first.</p></div></div>
-            <div class="form-grid">
-              <label class="field field-wide"><span>Full name</span><input data-path="basics.name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Alex Morgan" /></label>
-              <label class="field"><span>Professional title</span><input data-path="basics.title" type="text" autocomplete="organization-title" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Product Designer" /></label>
-              <label class="field"><span>Location</span><input data-path="basics.location" type="text" autocomplete="address-level2" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Austin, TX" /></label>
-              <label class="field"><span>Email</span><input data-path="basics.email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="254" placeholder="alex@email.com" /></label>
-              <label class="field"><span>Phone</span><input data-path="basics.phone" type="tel" inputmode="tel" autocomplete="tel" autocapitalize="off" spellcheck="false" enterkeyhint="next" maxlength="40" placeholder="(555) 123-4567" /></label>
-              <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" type="url" inputmode="url" autocomplete="url" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="300" placeholder="linkedin.com/in/alexmorgan" /></label>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">CV builder <span class="eyebrow-rule"></span> Private by default</p>
+                <h1>Build a CV<br /><em>that gets read.</em></h1>
+              </div>
+              <div class="completion-widget">
+                <div class="completion-ring" id="completionRing"><strong id="completionPercent">0%</strong></div>
+                <div><span>CV strength</span><small id="completionLabel">Add your details</small></div>
+              </div>
             </div>
-            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back hidden>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
-          </section>
 
-          <section class="form-section" data-editor-section="summary" hidden inert>
-            <div class="section-heading"><span class="section-number">02</span><div><h2 tabindex="-1">Professional summary</h2><p>Two to four lines that frame your value.</p></div></div>
-            <label class="field"><span>Summary <b class="character-count" id="summaryCount">0 / 500</b></span><textarea data-path="summary" enterkeyhint="enter" maxlength="500" rows="5" placeholder="Product designer with 6+ years turning complex workflows into clear, useful experiences. Known for pairing thoughtful research with fast, measurable execution."></textarea></label>
-            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
-          </section>
+            <div class="quick-actions"><button class="quick-action" id="importPdfButton" type="button"><span class="quick-icon">PDF</span><span><strong>Start from a PDF</strong><small>Extract your existing CV</small></span><span class="quick-arrow">↗</span></button><div class="ats-note"><span class="note-icon">✦</span><div><strong>ATS-ready by default</strong><p>Clean hierarchy and standard headings keep your story readable by screening software.</p></div></div></div>
 
-          <section class="form-section" data-editor-section="experience" hidden inert>
-            <div class="section-heading"><span class="section-number">03</span><div><h2 tabindex="-1">Experience</h2><p>Lead with impact. Start bullets with strong verbs.</p></div><button class="icon-button" id="addExperience" type="button" title="Add experience" aria-label="Add experience">+</button></div>
-            <div id="experienceList" class="repeat-list"></div>
-            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
-          </section>
+            <details id="atsTips" class="ats-tips" open>
+              <summary>ATS tips <span id="atsTipsCount" class="ats-tips-count" aria-live="polite"></span></summary>
+              <ul id="atsTipsList"></ul>
+            </details>
 
-          <section class="form-section" data-editor-section="education" hidden inert>
-            <div class="section-heading"><span class="section-number">04</span><div><h2 tabindex="-1">Education</h2><p>Include your most relevant credentials.</p></div><button class="icon-button" id="addEducation" type="button" title="Add education" aria-label="Add education">+</button></div>
-            <div id="educationList" class="repeat-list"></div>
-            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
-          </section>
+            <form id="resumeForm" autocomplete="off">
+              <section class="form-section" data-editor-section="contact">
+                <div class="section-heading"><span class="section-number">01</span><div><h2 tabindex="-1">Contact details</h2><p>The essentials recruiters look for first.</p></div></div>
+                <div class="form-grid">
+                  <label class="field field-wide"><span>Full name</span><input data-path="basics.name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Alex Morgan" /></label>
+                  <label class="field"><span>Professional title</span><input data-path="basics.title" type="text" autocomplete="organization-title" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Product Designer" /></label>
+                  <label class="field"><span>Location</span><input data-path="basics.location" type="text" autocomplete="address-level2" autocapitalize="words" enterkeyhint="next" maxlength="200" placeholder="Austin, TX" /></label>
+                  <label class="field"><span>Email</span><input data-path="basics.email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="254" placeholder="alex@email.com" /></label>
+                  <label class="field"><span>Phone</span><input data-path="basics.phone" type="tel" inputmode="tel" autocomplete="tel" autocapitalize="off" spellcheck="false" enterkeyhint="next" maxlength="40" placeholder="(555) 123-4567" /></label>
+                  <label class="field"><span>LinkedIn or portfolio</span><input data-path="basics.website" type="url" inputmode="url" autocomplete="url" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="300" placeholder="linkedin.com/in/alexmorgan" /></label>
+                </div>
+                <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back hidden>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
+              </section>
 
-          <section class="form-section" data-editor-section="skills" hidden inert>
-            <div class="section-heading"><span class="section-number">05</span><div><h2 tabindex="-1">Skills</h2><p>Use the language of your target role.</p></div></div>
-            <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" type="text" enterkeyhint="done" maxlength="2000" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
-            <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next><span class="section-next-word">Next</span><span class="section-preview-word">Preview</span></button></div>
-          </section>
-        </form>
+              <section class="form-section" data-editor-section="summary" hidden inert>
+                <div class="section-heading"><span class="section-number">02</span><div><h2 tabindex="-1">Professional summary</h2><p>Two to four lines that frame your value.</p></div></div>
+                <label class="field"><span>Summary <b class="character-count" id="summaryCount">0 / 500</b></span><textarea data-path="summary" enterkeyhint="enter" maxlength="500" rows="5" placeholder="Product designer with 6+ years turning complex workflows into clear, useful experiences. Known for pairing thoughtful research with fast, measurable execution."></textarea></label>
+                <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
+              </section>
+
+              <section class="form-section" data-editor-section="experience" hidden inert>
+                <div class="section-heading"><span class="section-number">03</span><div><h2 tabindex="-1">Experience</h2><p>Lead with impact. Start bullets with strong verbs.</p></div><button class="icon-button" id="addExperience" type="button" title="Add experience" aria-label="Add experience">+</button></div>
+                <div id="experienceList" class="repeat-list"></div>
+                <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
+              </section>
+
+              <section class="form-section" data-editor-section="education" hidden inert>
+                <div class="section-heading"><span class="section-number">04</span><div><h2 tabindex="-1">Education</h2><p>Include your most relevant credentials.</p></div><button class="icon-button" id="addEducation" type="button" title="Add education" aria-label="Add education">+</button></div>
+                <div id="educationList" class="repeat-list"></div>
+                <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next>Next</button></div>
+              </section>
+
+              <section class="form-section" data-editor-section="skills" hidden inert>
+                <div class="section-heading"><span class="section-number">05</span><div><h2 tabindex="-1">Skills</h2><p>Use the language of your target role.</p></div></div>
+                <label class="field"><span>Skills <b class="field-hint">Separate with commas</b></span><input data-path="skills" type="text" enterkeyhint="done" maxlength="2000" placeholder="Figma, user research, prototyping, design systems, accessibility" /></label>
+                <div class="section-pager"><button class="button button-ghost section-back" type="button" data-section-back>Back</button><button class="button button-accent section-next" type="button" data-section-next><span class="section-next-word">Next</span><span class="section-preview-word">Preview</span></button></div>
+              </section>
+            </form>
           </div>
         </div>
       </section>
@@ -202,10 +202,30 @@
     </div>
   </dialog>
   <template id="experienceTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button">×</button><div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" type="text" enterkeyhint="next" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" type="text" enterkeyhint="next" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" enterkeyhint="enter" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div></article>
+    <article class="repeat-item">
+      <div class="entry-card-header">
+        <button class="entry-toggle" type="button" aria-expanded="false"><span class="entry-card-title"></span></button>
+        <button class="button button-ghost entry-move" type="button" data-move="up">Move up</button>
+        <button class="button button-ghost entry-move" type="button" data-move="down">Move down</button>
+        <button class="remove-item" type="button">×</button>
+      </div>
+      <div class="entry-card-body">
+        <div class="form-grid"><label class="field field-wide"><span>Job title</span><input data-key="role" type="text" enterkeyhint="next" maxlength="200" placeholder="Senior Product Designer" /></label><label class="field"><span>Company</span><input data-key="company" type="text" enterkeyhint="next" maxlength="200" placeholder="Northstar Labs" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2022 — Present" /></label><label class="field field-wide"><span>Highlights <b class="field-hint">One per line</b></span><textarea data-key="highlights" enterkeyhint="enter" maxlength="10000" rows="4" placeholder="Redesigned onboarding, increasing activation by 24%"></textarea></label></div>
+      </div>
+    </article>
   </template>
   <template id="educationTemplate">
-    <article class="repeat-item"><button class="remove-item" type="button">×</button><div class="form-grid"><label class="field field-wide"><span>Degree or credential</span><input data-key="degree" type="text" enterkeyhint="next" maxlength="200" placeholder="BFA, Interaction Design" /></label><label class="field"><span>School</span><input data-key="school" type="text" enterkeyhint="next" maxlength="200" placeholder="State University" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2014 — 2018" /></label></div></article>
+    <article class="repeat-item">
+      <div class="entry-card-header">
+        <button class="entry-toggle" type="button" aria-expanded="false"><span class="entry-card-title"></span></button>
+        <button class="button button-ghost entry-move" type="button" data-move="up">Move up</button>
+        <button class="button button-ghost entry-move" type="button" data-move="down">Move down</button>
+        <button class="remove-item" type="button">×</button>
+      </div>
+      <div class="entry-card-body">
+        <div class="form-grid"><label class="field field-wide"><span>Degree or credential</span><input data-key="degree" type="text" enterkeyhint="next" maxlength="200" placeholder="BFA, Interaction Design" /></label><label class="field"><span>School</span><input data-key="school" type="text" enterkeyhint="next" maxlength="200" placeholder="State University" /></label><label class="field"><span>Dates</span><input data-key="dates" type="text" enterkeyhint="next" maxlength="100" placeholder="2014 — 2018" /></label></div>
+      </div>
+    </article>
   </template>
   <script src="../storage.js"></script>
   <script src="../cv-import.js"></script>
