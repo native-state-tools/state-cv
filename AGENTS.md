@@ -9,7 +9,7 @@
 ## Project profile
 
 - State CV is a local-first, privacy-first ATS CV builder by Native State Tools.
-- Vanilla HTML/CSS/JavaScript, hosted on GitHub Pages. `index.html` is the landing page. `app/index.html` owns the app markup and its CSP. `app.js` owns editor state, PDF import and PDF export; `storage.js` owns local persistence (revisions, snapshots, damaged-data quarantine); `styles.css` owns presentation; `sw.js` is the offline service worker.
+- Vanilla HTML/CSS/JavaScript, hosted on GitHub Pages. `index.html` is the landing page. `app/index.html` owns the app markup and its CSP. `app.js` owns editor state; `cv-import.js` owns PDF import parsing; `cv-export.js` owns PDF and plain-text export; `storage.js` owns local persistence (revisions, snapshots, damaged-data quarantine); `styles.css` owns presentation; `sw.js` is the offline service worker.
 - `server.js` is only a Node built-in-module static development server bound to `127.0.0.1:3000`. It is not an application backend.
 - PDF.js 3.11.174 and jsPDF 2.5.1 are vendored in `vendor/`. Never replace them with CDN scripts or runtime downloads.
 
@@ -34,7 +34,7 @@
 ## Code details that are easy to break
 
 - Source files use CRLF line endings. Keep CRLF when editing.
-- Unit tests slice real functions out of `app.js` using `indexOf` markers. Do not break these boundaries: the line right after `importPdfLines` is `document.querySelectorAll('[data-path]').forEach(...)`, and the `restoreSnapshot` slice ends at `\nfunction openYourDataDialog()`. If code moves, update the markers in the same change.
+- Unit tests slice real functions out of `app.js`, `cv-import.js`, and `cv-export.js` using `indexOf` markers. Do not break these boundaries: `cv-import.js` runs from `function pdfItemBoxes(items)` through the end of `function importPdfLines(lines)`, and the `[data-path]` `forEach` stays in `app.js`; `cv-export.js` runs from `const PDF_TEXT_SIZES` through the end of `function downloadPlainText()`; the `restoreSnapshot` slice in `app.js` ends at `\nfunction openYourDataDialog()`. If code moves, update the markers in the same change.
 - New logic that needs unit tests should be pure functions (no DOM access) so tests can extract them.
 - The existing e2e PDF test exports a blank CV and expects status `/PDF exported.*(Download started|Save to Files)/`. It must keep passing.
 

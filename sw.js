@@ -1,4 +1,4 @@
-const CACHE_NAME = 'state-cv-cache-v29';
+const CACHE_NAME = 'state-cv-cache-v30';
 const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',
@@ -6,6 +6,8 @@ const PRECACHE_URLS = [
   './about.html',
   './styles.css',
   './storage.js',
+  './cv-import.js',
+  './cv-export.js',
   './app.js',
   './manifest.json',
   './icons/icon.svg',

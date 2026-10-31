@@ -4,14 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const appSource = fs.readFileSync(path.join(__dirname, '../../app.js'), 'utf8');
-const helperStart = appSource.indexOf('function toPdfText(text) {');
-const helperEnd = appSource.indexOf('\nfunction cvToPlainText(data) {', helperStart);
-assert.ok(helperStart >= 0 && helperEnd > helperStart, 'Could not isolate ATS tip helpers from app.js');
+const exportSource = fs.readFileSync(path.join(__dirname, '../../cv-export.js'), 'utf8');
+const helperStart = exportSource.indexOf('function toPdfText(text) {');
+const helperEnd = exportSource.indexOf('\nfunction cvToPlainText(data) {', helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart, 'Could not isolate ATS tip helpers from cv-export.js');
 
 const sandbox = vm.createContext({});
 vm.runInContext([
-  appSource.slice(helperStart, helperEnd),
+  exportSource.slice(helperStart, helperEnd),
   'globalThis.getAtsTips = getAtsTips;'
 ].join('\n'), sandbox);
 
