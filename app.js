@@ -53,6 +53,7 @@ let backupReminder = readBackupReminder();
 let backupReminderDismissed = false;
 let pendingEntryRemoval = null;
 let undoToastTimer = null;
+const entryExpanded = { experience: [], education: [] };
 
 try {
   const storedPersistenceResult = stateStorage.getItem('state-cv-persistence-v1');
@@ -217,7 +218,7 @@ function preserveDamagedData(raw, cause) {
   console.warn('State CV found damaged saved data and will not replace it automatically.', cause);
 }
 
-function saveData({ force = false } = {}) {
+function saveData({ force = false, statusMessage = '' } = {}) {
   if (storageLoadFailed && !force) {
     setStatus('error', 'Saved data not replaced');
     return false;
@@ -246,7 +247,7 @@ function saveData({ force = false } = {}) {
     } else if (storageNoticeKind === 'unavailable') {
       hideStorageNotice();
     }
-    setStatus('saved', 'Saved locally');
+    setStatus('saved', statusMessage || 'Saved locally');
     requestStoragePersistence();
     noteBackupReminderEdit();
     return true;
@@ -357,12 +358,13 @@ function snapshotLatestStored(minimumIntervalMs = 0) {
   return true;
 }
 
-function scheduleSave() {
-  setStatus('saving', 'Saving...');
+function scheduleSave(statusMessage) {
+  const message = typeof statusMessage === 'string' ? statusMessage : '';
+  setStatus('saving', message || 'Saving...');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    saveData();
+    saveData({ statusMessage: message });
   }, 350);
 }
 
@@ -584,12 +586,16 @@ function undoEntryRemoval() {
   pendingEntryRemoval = null;
   dismissUndoToast();
   let restoredIndex = 0;
+  const flags = expandedFlags(pending.list, items.length);
   if (replacePlaceholder) {
     items[0] = structuredClone(pending.item);
+    flags[0] = true;
   } else {
     restoredIndex = Math.min(Math.max(pending.index, 0), items.length);
     items.splice(restoredIndex, 0, structuredClone(pending.item));
+    flags.splice(restoredIndex, 0, true);
   }
+  rememberExpanded(pending.list, flags);
   renderRepeaters();
   updatePreview();
   updateCompletion();
@@ -598,8 +604,8 @@ function undoEntryRemoval() {
   const sectionId = pending.list === 'experience' ? 'experience' : 'education';
   showEditorSection(sectionId);
   const entry = document.querySelectorAll(`#${listId} .repeat-item`)[restoredIndex];
-  const field = entry ? entry.querySelector('input, textarea') : null;
-  if (field) field.focus();
+  const toggle = entry ? entry.querySelector('.entry-toggle') : null;
+  if (toggle) toggle.focus();
 }
 
 function shouldRemindBackup(state, now) {
@@ -939,7 +945,29 @@ window.addEventListener('storage', (event) => {
 window.addEventListener('beforeunload', flushScheduledSave);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushScheduledSave(); });
 
+function entryCardTitle(type, item) {
+  const record = item && typeof item === 'object' ? item : {};
+  const text = (value) => (typeof value === 'string' ? value.trim() : '');
+  const parts = type === 'education'
+    ? [text(record.degree), text(record.school)]
+    : [text(record.role), text(record.company)];
+  const title = parts.filter(Boolean).join(', ');
+  if (title) return title;
+  return type === 'education' ? 'New education entry' : 'New experience entry';
+}
+
+function moveEntry(items, fromIndex, toIndex) {
+  if (!Array.isArray(items) || !Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) return false;
+  if (fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length) return false;
+  if (fromIndex === toIndex) return false;
+  const [moved] = items.splice(fromIndex, 1);
+  items.splice(toIndex, 0, moved);
+  return true;
+}
+
 function renderFields() {
+  entryExpanded.experience = [];
+  entryExpanded.education = [];
   document.querySelectorAll('[data-path]').forEach((field) => { field.value = getValue(field.dataset.path); });
   renderRepeaters();
   updateSummaryCount();
@@ -950,33 +978,158 @@ function renderRepeaters() {
   renderRepeater('educationList', 'educationTemplate', resumeData.education, () => structuredClone(defaultData.education[0]));
 }
 
+function expandedFlags(type, count) {
+  const stored = entryExpanded[type] || [];
+  const flags = [];
+  for (let index = 0; index < count; index += 1) {
+    flags.push(typeof stored[index] === 'boolean' ? stored[index] : count < 2);
+  }
+  return flags;
+}
+
+function rememberExpanded(type, flags) {
+  entryExpanded[type] = flags.slice();
+}
+
+function labelEntryControls(entry, type, index, count, item) {
+  const toggle = entry.querySelector('.entry-toggle');
+  const titleNode = entry.querySelector('.entry-card-title');
+  const open = toggle.getAttribute('aria-expanded') === 'true';
+  const title = entryCardTitle(type, item);
+  titleNode.textContent = title;
+  const toggleLabel = `${open ? 'Collapse' : 'Expand'} ${type} entry ${index + 1}: ${title}`;
+  toggle.setAttribute('aria-label', toggleLabel);
+  toggle.title = toggleLabel;
+  const up = entry.querySelector('[data-move="up"]');
+  const down = entry.querySelector('[data-move="down"]');
+  const upLabel = `Move ${type} entry ${index + 1} up`;
+  const downLabel = `Move ${type} entry ${index + 1} down`;
+  up.setAttribute('aria-label', upLabel);
+  up.title = upLabel;
+  up.disabled = index === 0;
+  down.setAttribute('aria-label', downLabel);
+  down.title = downLabel;
+  down.disabled = index === count - 1;
+  const removeButton = entry.querySelector('.remove-item');
+  const removeLabel = `Remove ${type} entry ${index + 1}`;
+  removeButton.setAttribute('aria-label', removeLabel);
+  removeButton.title = removeLabel;
+}
+
+function focusRepeatEntry(type, index, selector) {
+  const listId = type === 'experience' ? 'experienceList' : 'educationList';
+  const entry = document.querySelectorAll(`#${listId} .repeat-item`)[index];
+  const target = entry ? entry.querySelector(selector) : null;
+  if (target) target.focus();
+}
+
+function focusMoveButton(type, index, direction) {
+  const listId = type === 'experience' ? 'experienceList' : 'educationList';
+  const entry = document.querySelectorAll(`#${listId} .repeat-item`)[index];
+  if (!entry) return;
+  const preferred = direction < 0 ? 'up' : 'down';
+  const preferredButton = entry.querySelector(`[data-move="${preferred}"]`);
+  const otherButton = entry.querySelector(`[data-move="${preferred === 'up' ? 'down' : 'up'}"]`);
+  const target = preferredButton && !preferredButton.disabled ? preferredButton : otherButton;
+  if (target && !target.disabled) target.focus();
+}
+
+function addEntry(type) {
+  const items = resumeData[type];
+  const maxEntries = type === 'experience' ? MAX_EXPERIENCE_ENTRIES : MAX_EDUCATION_ENTRIES;
+  if (items.length >= maxEntries) {
+    setImportStatus(`Limit of ${maxEntries} entries reached`, true);
+    return;
+  }
+  const flags = expandedFlags(type, items.length);
+  items.push(type === 'experience'
+    ? { role: '', company: '', dates: '', highlights: '' }
+    : { degree: '', school: '', dates: '' });
+  flags.push(true);
+  rememberExpanded(type, flags);
+  renderRepeaters();
+  updatePreview();
+  updateCompletion();
+  scheduleSave();
+  focusRepeatEntry(type, items.length - 1, 'input, textarea');
+}
+
+function moveRepeatEntry(type, fromIndex, direction) {
+  const items = resumeData[type];
+  const toIndex = fromIndex + direction;
+  const flags = expandedFlags(type, items.length);
+  if (!moveEntry(items, fromIndex, toIndex)) return;
+  moveEntry(flags, fromIndex, toIndex);
+  rememberExpanded(type, flags);
+  renderRepeaters();
+  updatePreview();
+  updateCompletion();
+  scheduleSave(`Moved to position ${toIndex + 1} of ${items.length}`);
+  focusMoveButton(type, toIndex, direction);
+}
+
 function renderRepeater(listId, templateId, items, createBlankRecord) {
   const list = document.querySelector(`#${listId}`);
   const entryType = listId === 'experienceList' ? 'experience' : 'education';
+  const openFlags = expandedFlags(entryType, items.length);
   list.replaceChildren();
   items.forEach((item, index) => {
     const node = document.querySelector(`#${templateId}`).content.cloneNode(true);
+    const entry = node.querySelector('.repeat-item');
+    const toggle = entry.querySelector('.entry-toggle');
+    const body = entry.querySelector('.entry-card-body');
+    const open = openFlags[index];
+    const bodyId = `${entryType}-entry-${index}`;
+    body.id = bodyId;
+    toggle.setAttribute('aria-controls', bodyId);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    body.hidden = !open;
+    body.inert = !open;
+    labelEntryControls(entry, entryType, index, items.length, item);
     node.querySelectorAll('[data-key]').forEach((field) => {
       field.value = item[field.dataset.key] || '';
-      field.addEventListener('input', () => { item[field.dataset.key] = field.value; updatePreview(); updateCompletion(); scheduleSave(); });
+      field.addEventListener('input', () => {
+        item[field.dataset.key] = field.value;
+        if (field.dataset.key === 'role' || field.dataset.key === 'company' || field.dataset.key === 'degree' || field.dataset.key === 'school') {
+          labelEntryControls(entry, entryType, index, items.length, item);
+        }
+        updatePreview();
+        updateCompletion();
+        scheduleSave();
+      });
     });
-    const removeButton = node.querySelector('.remove-item');
-    removeButton.setAttribute('aria-label', `Remove ${entryType} entry ${index + 1}`);
-    removeButton.title = `Remove ${entryType} entry ${index + 1}`;
-    removeButton.addEventListener('click', () => {
+    toggle.addEventListener('click', () => {
+      const nextOpen = toggle.getAttribute('aria-expanded') !== 'true';
+      const flags = expandedFlags(entryType, items.length);
+      flags[index] = nextOpen;
+      rememberExpanded(entryType, flags);
+      toggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+      body.hidden = !nextOpen;
+      body.inert = !nextOpen;
+      labelEntryControls(entry, entryType, index, items.length, item);
+    });
+    entry.querySelector('[data-move="up"]').addEventListener('click', () => moveRepeatEntry(entryType, index, -1));
+    entry.querySelector('[data-move="down"]').addEventListener('click', () => moveRepeatEntry(entryType, index, 1));
+    entry.querySelector('.remove-item').addEventListener('click', () => {
       const removed = {
         item: structuredClone(item),
         index,
         list: entryType,
         placeholderAdded: false
       };
+      const flags = expandedFlags(entryType, items.length);
       items.splice(index, 1);
+      flags.splice(index, 1);
       if (!items.length) {
         items.push(createBlankRecord());
         removed.placeholderAdded = true;
       }
+      rememberExpanded(entryType, flags);
       pendingEntryRemoval = removed;
-      renderRepeaters(); updatePreview(); updateCompletion(); scheduleSave();
+      renderRepeaters();
+      updatePreview();
+      updateCompletion();
+      scheduleSave();
       showUndoToast(entryType);
     });
     list.appendChild(node);
@@ -1250,14 +1403,8 @@ function startNewCv({ confirmReplacement = true } = {}) {
 }
 
 document.querySelectorAll('[data-path]').forEach((field) => field.addEventListener('input', () => { setValue(field.dataset.path, field.value); if (field.dataset.path === 'summary') updateSummaryCount(); updatePreview(); updateCompletion(); scheduleSave(); }));
-document.querySelector('#addExperience').addEventListener('click', () => {
-  if (resumeData.experience.length >= MAX_EXPERIENCE_ENTRIES) { setImportStatus(`Limit of ${MAX_EXPERIENCE_ENTRIES} entries reached`, true); return; }
-  resumeData.experience.push({ role: '', company: '', dates: '', highlights: '' }); renderRepeaters(); updateCompletion(); scheduleSave();
-});
-document.querySelector('#addEducation').addEventListener('click', () => {
-  if (resumeData.education.length >= MAX_EDUCATION_ENTRIES) { setImportStatus(`Limit of ${MAX_EDUCATION_ENTRIES} entries reached`, true); return; }
-  resumeData.education.push({ degree: '', school: '', dates: '' }); renderRepeaters(); updateCompletion(); scheduleSave();
-});
+document.querySelector('#addExperience').addEventListener('click', () => addEntry('experience'));
+document.querySelector('#addEducation').addEventListener('click', () => addEntry('education'));
 
 async function copyPlainText() {
   const text = cvToPlainText(resumeData);
@@ -1706,8 +1853,12 @@ function updateStickyOffsets() {
   const root = document.documentElement;
   const noticeStack = document.querySelector('#noticeStack');
   const topbar = document.querySelector('.topbar');
+  const sectionNav = document.querySelector('.section-nav');
   root.style.setProperty('--notice-height', `${noticeStack.getBoundingClientRect().height}px`);
   root.style.setProperty('--topbar-height', `${topbar.getBoundingClientRect().height}px`);
+  const navIsSticky = sectionNav && getComputedStyle(sectionNav).position === 'sticky';
+  const navHeight = navIsSticky ? sectionNav.getBoundingClientRect().height : 0;
+  root.style.setProperty('--section-nav-offset', `${navHeight}px`);
 }
 
 updateStickyOffsets();
@@ -1715,6 +1866,7 @@ if (typeof ResizeObserver === 'function') {
   const stickyOffsetObserver = new ResizeObserver(updateStickyOffsets);
   stickyOffsetObserver.observe(document.querySelector('#noticeStack'));
   stickyOffsetObserver.observe(document.querySelector('.topbar'));
+  stickyOffsetObserver.observe(document.querySelector('.section-nav'));
 } else {
   window.addEventListener('resize', updateStickyOffsets);
 }

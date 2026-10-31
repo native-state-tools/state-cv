@@ -53,7 +53,24 @@ async function openApp(page) {
 
 async function enterEditor(page) {
   await page.getByRole('button', { name: /Continue/ }).click();
+  const launchScreen = page.locator('#launchScreen');
+  await expect(launchScreen).toHaveClass(/is-hidden/);
+  await expect.poll(() => launchScreen.evaluate((screen) => {
+    const style = getComputedStyle(screen);
+    const more = document.querySelector('.more-menu summary');
+    const box = more.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    const coversMore = Boolean(hit && (hit === screen || screen.contains(hit)));
+    return Number(style.opacity) < 0.01 && style.pointerEvents === 'none' && !coversMore
+      && !document.querySelector('#appShell').hasAttribute('inert');
+  })).toBe(true);
   await expect(page.getByLabel('Full name')).toBeVisible();
+}
+
+async function activateLink(locator) {
+  await locator.evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await expect(locator).toBeInViewport();
+  await locator.click();
 }
 
 const sectionHeadings = {
@@ -528,6 +545,7 @@ test('200 percent root text setting keeps phone layout and controls in bounds', 
   await enterEditor(page);
   const dimensions = await page.evaluate(() => {
     document.documentElement.style.fontSize = '200%';
+    if (typeof updateStickyOffsets === 'function') updateStickyOffsets();
     const controls = [...document.querySelectorAll('a, button, input, textarea, select, summary')]
       .filter((element) => {
         const style = getComputedStyle(element);
@@ -546,6 +564,7 @@ test('200 percent root text setting keeps phone layout and controls in bounds', 
       });
     const nav = document.querySelector('.mobile-view-nav');
     const topbar = document.querySelector('.topbar');
+    const sectionNav = document.querySelector('.section-nav');
     const obscuredFields = [];
     [...document.querySelectorAll('#resumeForm input, #resumeForm textarea')].forEach((field) => {
       field.scrollIntoView({ behavior: 'instant', block: 'nearest' });
@@ -559,6 +578,9 @@ test('200 percent root text setting keeps phone layout and controls in bounds', 
         obscuredFields.push(field.dataset.path || field.dataset.key);
       }
       if (getComputedStyle(topbar).display !== 'none' && overlaps(box, topbarBox)) {
+        obscuredFields.push(field.dataset.path || field.dataset.key);
+      }
+      if (sectionNav && getComputedStyle(sectionNav).position === 'sticky' && overlaps(box, sectionNav.getBoundingClientRect())) {
         obscuredFields.push(field.dataset.path || field.dataset.key);
       }
     });
@@ -986,7 +1008,7 @@ test('Undo restores a removed experience entry and keeps it after reload', async
   await undo.click();
   const title = page.getByLabel('Job title');
   await expect(title).toHaveValue('Kept this role');
-  await expect(title).toBeFocused();
+  await expect(page.getByRole('button', { name: /^Collapse experience entry 1/ })).toBeFocused();
   await expect.poll(() => page.evaluate(() => {
     const raw = localStorage.getItem('state-cv-data-v1');
     return raw ? JSON.parse(raw).experience[0].role : '';
@@ -1017,7 +1039,7 @@ test('Undo toast disappears when a second removal replaces it and restores that 
   await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(1);
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByLabel('Degree or credential')).toHaveValue('Beta Degree');
-  await expect(page.getByLabel('Degree or credential')).toBeFocused();
+  await expect(page.getByRole('button', { name: /^Collapse education entry 1/ })).toBeFocused();
   await openSection(page, 'Experience');
   await expect(page.getByLabel('Job title')).toHaveValue('');
   await expect(toast).toBeHidden();
@@ -1163,7 +1185,7 @@ test('About and privacy page loads, links back, and does not overflow', async ({
   }));
   expect(launchDimensions.scrollWidth).toBeLessThanOrEqual(launchDimensions.innerWidth);
 
-  await page.getByRole('link', { name: 'About and privacy' }).click();
+  await activateLink(page.getByRole('link', { name: 'About and privacy' }));
   await expect(page).toHaveURL(/\/about\.html$/);
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/svg\+xml/);
   await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
@@ -1189,19 +1211,19 @@ test('About and privacy page loads, links back, and does not overflow', async ({
 
   await page.context().setOffline(true);
   try {
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
   } finally {
     await page.context().setOffline(false);
   }
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
 
-  await page.getByRole('link', { name: 'Back to State CV' }).click();
+  await activateLink(page.getByRole('link', { name: 'Back to State CV' }));
   await expect(page).toHaveURL(/\/app\/$/);
   await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
   await enterEditor(page);
   await openDataDialog(page);
-  await page.getByRole('dialog', { name: 'Your data' }).getByRole('link', { name: 'About and privacy' }).click();
+  await activateLink(page.getByRole('dialog', { name: 'Your data' }).getByRole('link', { name: 'About and privacy' }));
   await expect(page).toHaveURL(/\/about\.html$/);
   await expect(page.getByRole('heading', { level: 1, name: 'About and privacy' })).toBeVisible();
 });
@@ -1305,6 +1327,8 @@ async function expectImportedFixture(page, { companies, skills }) {
   await expect(experience).toHaveCount(3);
   for (let index = 0; index < fixtureJobs.length; index += 1) {
     const entry = experience.nth(index);
+    const expand = entry.getByRole('button', { name: /^Expand / });
+    if (await expand.count()) await expand.click();
     await expect(entry.getByLabel('Job title')).toHaveValue(fixtureJobs[index][0]);
     await expect(entry.getByLabel('Company')).toHaveValue(companies[index]);
     await expect(entry.getByLabel('Dates')).toHaveValue(fixtureJobs[index][1]);
