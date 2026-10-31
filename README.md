@@ -55,7 +55,7 @@ npm run test:e2e
 - ATS tips panel runs locally in the browser and sends nothing anywhere
 - Backup reminders are stored only in this browser and contain no CV content
 - About and privacy page explains what stays in this browser and how to remove it. The same policy is in [PRIVACY.md](PRIVACY.md)
-- Responsive editor, full-screen preview, and an Edit | Preview | Export bottom bar on screens narrower than 1024px
+- The editor shows one section at a time (Contact, Summary, Experience, Education, Skills). Wide screens use a collapsible section list beside the form; narrower screens use a section tab row. CV strength and ATS tips stay above the form. Screens narrower than 1024px still use the Edit | Preview | Export bottom bar and a full-screen preview
 - No account or external service required
 
 PDF import reads selectable text in the browser and maps common contact, summary, experience, education, and skills headings into the editor. It supports common single-column layouts, separate or combined role/company/date lines, numeric dates, month-name dates, and several heading variations. Image-only or scanned PDFs need OCR before they can be imported; heavily designed multi-column PDFs may still need a quick manual review because PDF text order is not standardized.

@@ -156,7 +156,41 @@ h1 em { color: var(--accent); font-family: var(--serif); font-weight: 400; }
 .ats-tips ul { margin: 0; padding: 0 14px 14px 2em; }
 .ats-tips li { color: var(--ink); font-size: 13px; line-height: 1.5; margin: 0 0 8px; overflow-wrap: anywhere; }
 .ats-tips li:last-child { margin-bottom: 0; }
-.form-section { border-top: 2px solid var(--accent); padding: 29px 0 34px; }
+.form-section { border-top: 2px solid var(--accent); padding: 29px 0 34px; scroll-margin-top: calc(var(--notice-height, 0px) + var(--topbar-height, 0px) + 12px); }
+.editor-body, .editor-main, .section-nav { min-width: 0; }
+.section-nav-toggle { margin-bottom: 10px; overflow-wrap: anywhere; white-space: normal; width: 100%; }
+.section-nav-list { display: flex; gap: 4px; list-style: none; margin: 0; min-width: 0; overflow-x: auto; padding: 0; }
+.section-nav-list > li { flex: 1 1 0; min-width: 0; }
+.section-nav-item { align-items: center; background: transparent; border: 1px solid var(--control-border); border-radius: 7px; color: var(--ink); display: flex; flex-direction: column; font-size: 11px; font-weight: 700; gap: 2px; justify-content: center; line-height: 1.15; min-height: 44px; min-width: 0; padding: 6px 2px; text-align: center; width: 100%; }
+.section-nav-item:hover { border-color: var(--focus-ring); }
+.section-nav-item[aria-current="step"] { background: var(--accent); border-color: var(--accent); color: var(--canvas); }
+.section-nav-item[aria-current="step"]:hover { background: var(--focus-ring); border-color: var(--focus-ring); }
+.section-nav-number { color: var(--cv-accent); font-family: Consolas, 'Courier New', monospace; font-size: 10px; }
+.section-nav-name { display: block; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.section-nav-item[aria-current="step"] .section-nav-number,
+.section-nav-item[aria-current="step"] .section-nav-check { color: var(--canvas); }
+.section-nav-check { color: var(--ink); font-size: 12px; line-height: 1; }
+.section-pager { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.section-pager .section-next { margin-left: auto; }
+.section-preview-word { display: none; }
+@media (max-width: 1023px) {
+  .section-nav { margin-bottom: 8px; }
+  .section-nav-toggle { display: none; }
+  .form-section[data-editor-section="skills"] .section-next-word { display: none; }
+  .form-section[data-editor-section="skills"] .section-preview-word { display: inline; }
+}
+@media (min-width: 1024px) {
+  .editor-body { align-items: start; display: grid; gap: 28px; grid-template-columns: 188px minmax(0, 1fr); }
+  .editor-panel[data-sections-collapsed="true"] .editor-body { grid-template-columns: 72px minmax(0, 1fr); }
+  .section-nav-list { display: grid; gap: 6px; overflow-x: visible; }
+  .section-nav-list > li { flex: none; }
+  .section-nav-item { flex-direction: row; font-size: 13px; gap: 8px; justify-content: flex-start; padding: 8px 10px; text-align: left; }
+  .section-nav-check { margin-left: auto; }
+  .editor-panel[data-sections-collapsed="true"] .section-nav-name { display: none; }
+  .editor-panel[data-sections-collapsed="true"] .section-nav-item { justify-content: center; padding-left: 4px; padding-right: 4px; }
+  .editor-panel[data-sections-collapsed="true"] .section-nav-check { margin-left: 0; }
+  .form-section[data-editor-section="skills"] .section-next { display: none; }
+}
 .section-heading { align-items: flex-start; display: flex; gap: 15px; margin-bottom: 23px; }
 .section-number { color: var(--cv-accent); font-family: Consolas, 'Courier New', monospace; font-size: 11px; padding-top: 4px; }
 h2 { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; font-size: 17px; letter-spacing: -.04em; margin: 0 0 4px; }
@@ -171,7 +205,7 @@ input, textarea { background: rgba(14, 23, 38, .34); border: 1px solid var(--con
 input:focus, textarea:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px rgba(230, 197, 148, .28); }
 input::placeholder, textarea::placeholder { color: var(--muted); }
 textarea { line-height: 1.5; resize: vertical; }
-.field input, .field textarea, .field select, .paper-size-control select, .filename-control input {
+.field input, .field textarea, .field select, .paper-size-control select, .filename-control input, .section-pager .button {
   scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom));
   scroll-margin-top: calc(var(--notice-height, 0px) + var(--topbar-height, 0px) + 12px);
 }
