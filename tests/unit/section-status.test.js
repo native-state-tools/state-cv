@@ -84,6 +84,12 @@ test('experience and education need a role, company, degree, or school', () => {
   schoolOnly.education = [{ degree: '  ', school: 'State University', dates: '' }];
   assert.equal(getSectionStatus(schoolOnly).education, true);
   assert.equal(getSectionStatus(schoolOnly).experience, false);
+
+  const idsOnly = emptyCv();
+  idsOnly.experience = [{ id: 'exp_secret', role: '', company: '', dates: '', highlights: '' }];
+  idsOnly.education = [{ id: 'edu_secret', degree: '', school: '', dates: '' }];
+  assert.equal(getSectionStatus(idsOnly).experience, false);
+  assert.equal(getSectionStatus(idsOnly).education, false);
 });
 
 test('a filled CV marks every section complete and does not change the input', () => {

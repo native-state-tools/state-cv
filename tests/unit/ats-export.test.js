@@ -90,6 +90,18 @@ test('cvToPlainText keeps importer headings and role, company, date order', () =
   assert.equal(/\bDegree\b/.test(text), false);
 });
 
+test('cvToPlainText ignores entry ids', () => {
+  const text = cvToPlainText({
+    basics: { name: 'Ada Lovelace' },
+    experience: [{ id: 'exp_secret-id', role: 'Analyst', company: 'Engines', dates: '1842', highlights: 'Notes' }],
+    education: [{ id: 'edu_secret-id', degree: 'Mathematics', school: 'Home', dates: '1835' }]
+  });
+  assert.equal(text.includes('exp_secret-id'), false);
+  assert.equal(text.includes('edu_secret-id'), false);
+  assert.equal(text.includes('Analyst'), true);
+  assert.equal(text.includes('Mathematics'), true);
+});
+
 test('cvToPlainText skips empty fields and empty sections', () => {
   assert.equal(cvToPlainText({}), '');
   assert.equal(cvToPlainText({

@@ -68,7 +68,7 @@ The `Export PDF` button creates a native Letter or A4 PDF with selectable text, 
 
 PDF.js 3.11.174 and jsPDF 2.5.1 are vendored locally in `vendor/`, fonts use local system stacks, and the Content Security Policy blocks external scripts, styles, fonts, images, workers, and connections. State CV can run with Wi-Fi disabled and makes no external network requests.
 
-Drafts, snapshots, damaged-data copies, and the browser-persistence request result stay in local browser storage. After the first successful save, State CV requests persistent browser storage when the browser supports it; if the request is not granted, it retries on later page loads. The **Your data** dialog shows both the saved request result and the browser's current persistence status when available. Persistence is not a substitute for downloading a JSON backup. Storage behavior may differ when opening `app/index.html` directly from the file system compared with the hosted site.
+Drafts, snapshots, damaged-data copies, a one-time copy of a draft saved by an older version, and the browser-persistence request result stay in local browser storage. Older JSON backups still import. A downloaded backup uses the current format. After the first successful save, State CV requests persistent browser storage when the browser supports it; if the request is not granted, it retries on later page loads. The **Your data** dialog shows both the saved request result and the browser's current persistence status when available. Persistence is not a substitute for downloading a JSON backup. Storage behavior may differ when opening `app/index.html` directly from the file system compared with the hosted site.
 
 ## How updates work
 

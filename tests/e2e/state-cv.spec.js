@@ -83,8 +83,22 @@ const sectionHeadings = {
 
 async function openSection(page, name) {
   const button = page.locator('.section-nav').getByRole('button', { name: new RegExp(`(^|\\s)${name}(, complete)?$`) });
-  await button.click();
-  await expect(page.getByRole('heading', { level: 2, name: sectionHeadings[name], exact: true })).toBeVisible();
+  const heading = page.getByRole('heading', { level: 2, name: sectionHeadings[name], exact: true });
+  await expect(button).toBeVisible();
+  await expect(async () => {
+    await button.evaluate((element) => {
+      element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+      const rect = element.getBoundingClientRect();
+      const x = Math.min(window.innerWidth - 1, Math.max(0, rect.left + rect.width / 2));
+      const y = Math.min(window.innerHeight - 1, Math.max(0, rect.top + rect.height / 2));
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || (hit !== element && !element.contains(hit))) {
+        window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 96), behavior: 'instant' });
+      }
+    });
+    await button.click({ timeout: 1000 });
+    await expect(heading).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 8000 });
 }
 
 async function openDataDialog(page) {
@@ -96,7 +110,10 @@ async function openDataDialog(page) {
 async function savedName(page) {
   return page.evaluate(() => {
     const raw = localStorage.getItem('state-cv-data-v1');
-    return raw ? JSON.parse(raw).basics.name : null;
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    const master = data.master && typeof data.master === 'object' ? data.master : data;
+    return master.basics ? master.basics.name : null;
   });
 }
 
@@ -439,7 +456,11 @@ test('starting a new CV and restoring a snapshot keeps the pre-restore CV undoab
   await expect(page.locator('#dataDialogStatus')).toContainText('Snapshot restored and saved');
 
   await expect(snapshotEntries).toHaveCount(2);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('state-cv-snapshots-v1')).map((snapshot) => snapshot.data.basics.name)))
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('state-cv-snapshots-v1')).map((snapshot) => {
+    const data = snapshot.data || {};
+    const master = data.master && typeof data.master === 'object' ? data.master : data;
+    return master.basics ? master.basics.name : null;
+  })))
     .toEqual(['Snapshot CV', 'New CV after starting fresh']);
   await snapshotEntries.last().getByRole('button', { name: 'Restore' }).click();
   await expect(page.getByLabel('Full name')).toHaveValue('New CV after starting fresh');
@@ -460,6 +481,114 @@ test('Clear all data requires a second click and then empties local storage', as
   await page.getByRole('button', { name: /Click again to clear/ }).click();
   await expect(page.locator('#dataDialogStatus')).toContainText('All State CV data was cleared');
   await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('state-cv-')))).toEqual([]);
+});
+
+test('v1 saved data migrates to schemaVersion 2 and keeps one premigration copy', async ({ page }) => {
+  const v1 = {
+    schemaVersion: 1,
+    basics: {
+      name: 'Migrated Person',
+      title: 'Analyst',
+      location: 'Denver, CO',
+      email: 'mig@example.com',
+      phone: '555-0100',
+      website: ''
+    },
+    exportName: 'Migrated Person CV',
+    summary: 'Keeps the old CV.',
+    experience: [{ role: 'Analyst', company: 'North Co', dates: '2021 - 2024', highlights: 'Did the work' }],
+    education: [{ degree: 'B.A.', school: 'State University', dates: '2017 - 2021' }],
+    skills: 'Analysis'
+  };
+  const raw = JSON.stringify(v1);
+  await openApp(page);
+  await page.evaluate((stored) => localStorage.setItem('state-cv-data-v1', stored), raw);
+  await page.reload();
+  await enterEditor(page);
+  await expect(page.getByLabel('Full name')).toHaveValue('Migrated Person');
+  await expect(page.getByLabel('Email')).toHaveValue('mig@example.com');
+  await openSection(page, 'Experience');
+  await expect(page.getByLabel('Job title')).toHaveValue('Analyst');
+  await expect(page.getByLabel('Company')).toHaveValue('North Co');
+
+  const stored = await page.evaluate(() => ({
+    data: localStorage.getItem('state-cv-data-v1'),
+    premigration: localStorage.getItem('state-cv-premigration-v1'),
+    snapshots: localStorage.getItem('state-cv-snapshots-v1')
+  }));
+  expect(stored.premigration).toBe(raw);
+  const saved = JSON.parse(stored.data);
+  expect(saved.schemaVersion).toBe(2);
+  expect(saved.versions).toEqual([]);
+  expect(saved.master.basics.name).toBe('Migrated Person');
+  expect(saved.master.experience[0].role).toBe('Analyst');
+  expect(saved.master.experience[0].id).toMatch(/^exp_/);
+  expect(saved.master.education[0].id).toMatch(/^edu_/);
+  expect(saved.master.experience[0].id).not.toBe(saved.master.education[0].id);
+  const snapshots = JSON.parse(stored.snapshots);
+  expect(snapshots.some((snapshot) => snapshot.data && snapshot.data.basics && snapshot.data.basics.name === 'Migrated Person')).toBe(true);
+
+  await page.reload();
+  await enterEditor(page);
+  const after = await page.evaluate(() => ({
+    data: localStorage.getItem('state-cv-data-v1'),
+    premigration: localStorage.getItem('state-cv-premigration-v1')
+  }));
+  expect(after.premigration).toBe(stored.premigration);
+  expect(after.data).toBe(stored.data);
+});
+
+test('importing a v1 JSON backup saves and downloads schemaVersion 2', async ({ page }) => {
+  await openApp(page);
+  await page.locator('#importInput').setInputFiles({
+    name: 'v1-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(validBackup))
+  });
+  await expect(page.getByLabel('Full name')).toHaveValue('Recovered CV');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('state-cv-data-v1')));
+  expect(saved.schemaVersion).toBe(2);
+  expect(saved.versions).toEqual([]);
+  expect(saved.master.basics.name).toBe('Recovered CV');
+  expect(saved.master.experience[0].id).toMatch(/^exp_/);
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('.more-menu summary').click();
+  await page.getByRole('button', { name: 'Backup (JSON)' }).click();
+  const download = await downloadPromise;
+  const backup = JSON.parse(await fs.readFile(await download.path(), 'utf8'));
+  expect(backup.schemaVersion).toBe(2);
+  expect(backup.versions).toEqual([]);
+  expect(backup.master.basics.name).toBe('Recovered CV');
+  expect(backup.master.experience[0].id).toMatch(/^exp_/);
+  expect(JSON.stringify(backup)).not.toMatch(/"revision"/);
+});
+
+test('Clear all data removes the premigration copy', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('state-cv-premigration-v1', '{"schemaVersion":1,"basics":{"name":"Old"}}');
+    localStorage.setItem('state-cv-data-v1', JSON.stringify({
+      schemaVersion: 2,
+      master: {
+        basics: { name: 'Clear Me', title: '', location: '', email: '', phone: '', website: '' },
+        exportName: '',
+        summary: '',
+        experience: [{ id: 'exp_1', role: '', company: '', dates: '', highlights: '' }],
+        education: [{ id: 'edu_1', degree: '', school: '', dates: '' }],
+        skills: ''
+      },
+      versions: []
+    }));
+  });
+  await openApp(page);
+  await enterEditor(page);
+  await expect(page.getByLabel('Full name')).toHaveValue('Clear Me');
+  await openDataDialog(page);
+  await page.getByRole('button', { name: 'Clear all data' }).click();
+  await page.getByRole('button', { name: /Click again to clear/ }).click();
+  await expect(page.locator('#dataDialogStatus')).toContainText('All State CV data was cleared');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('state-cv-premigration-v1'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('state-cv-data-v1'))).toBeNull();
 });
 
 test('file:// load starts and supports editing without service-worker registration', async ({ page }, testInfo) => {
@@ -1011,7 +1140,10 @@ test('Undo restores a removed experience entry and keeps it after reload', async
   await expect(page.getByRole('button', { name: /^Collapse experience entry 1/ })).toBeFocused();
   await expect.poll(() => page.evaluate(() => {
     const raw = localStorage.getItem('state-cv-data-v1');
-    return raw ? JSON.parse(raw).experience[0].role : '';
+    if (!raw) return '';
+    const data = JSON.parse(raw);
+    const master = data.master && typeof data.master === 'object' ? data.master : data;
+    return master.experience && master.experience[0] ? master.experience[0].role : '';
   })).toBe('Kept this role');
   await page.reload();
   await enterEditor(page);
@@ -1411,12 +1543,13 @@ async function expectBlankSavedCv(page) {
     const raw = localStorage.getItem('state-cv-data-v1');
     if (!raw) return 'missing';
     try {
-      const data = JSON.parse(raw);
+      const stored = JSON.parse(raw);
+      const data = stored.master && typeof stored.master === 'object' ? stored.master : stored;
       const basics = data.basics || {};
       const texts = [basics.name, basics.title, basics.location, basics.email, basics.phone, basics.website, data.summary, data.skills, data.exportName];
       const lists = [...(data.experience || []), ...(data.education || [])];
       const filled = texts.some((value) => String(value || '').trim()) || lists.some((record) =>
-        Object.values(record || {}).some((value) => String(value || '').trim()));
+        Object.entries(record || {}).some(([key, value]) => key !== 'id' && String(value || '').trim()));
       return filled ? 'filled' : 'blank';
     } catch (error) {
       return 'unreadable';
