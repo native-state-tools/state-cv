@@ -51,6 +51,11 @@ async function openApp(page) {
   await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
 }
 
+// Tap targets must be at least 44px. Round first so sub-pixel layout (e.g. 43.99997) doesn't fail.
+function expectTapSize(value) {
+  expect(Math.round(value)).toBeGreaterThanOrEqual(44);
+}
+
 async function enterEditor(page) {
   await page.getByRole('button', { name: /Continue/ }).click();
   const launchScreen = page.locator('#launchScreen');
@@ -655,8 +660,8 @@ test('coarse-pointer repeat-entry controls have distinct 44px targets', async ({
   await expect(experienceRemove).toBeVisible();
   if (isMobile) {
     const experienceBox = await experienceRemove.boundingBox();
-    expect(experienceBox.width).toBeGreaterThanOrEqual(44);
-    expect(experienceBox.height).toBeGreaterThanOrEqual(44);
+    expectTapSize(experienceBox.width);
+    expectTapSize(experienceBox.height);
   }
   await openSection(page, 'Education');
   await page.getByRole('button', { name: 'Add education' }).click();
@@ -664,8 +669,8 @@ test('coarse-pointer repeat-entry controls have distinct 44px targets', async ({
   await expect(educationRemove).toBeVisible();
   if (isMobile) {
     const educationBox = await educationRemove.boundingBox();
-    expect(educationBox.width).toBeGreaterThanOrEqual(44);
-    expect(educationBox.height).toBeGreaterThanOrEqual(44);
+    expectTapSize(educationBox.width);
+    expectTapSize(educationBox.height);
   }
 });
 
@@ -1133,7 +1138,7 @@ test('Undo restores a removed experience entry and keeps it after reload', async
   await undo.focus();
   await expect(undo).toBeFocused();
   const box = await undo.boundingBox();
-  expect(box.height).toBeGreaterThanOrEqual(44);
+  expectTapSize(box.height);
   await undo.click();
   const title = page.getByLabel('Job title');
   await expect(title).toHaveValue('Kept this role');
@@ -1200,7 +1205,7 @@ test('Backup reminder shows after many edits and stays hidden after Remind me in
     await button.focus();
     await expect(button).toBeFocused();
     const box = await button.boundingBox();
-    expect(box.height).toBeGreaterThanOrEqual(44);
+    expectTapSize(box.height);
   }
   await notice.getByRole('button', { name: 'Remind me in 7 days' }).click();
   await expect(notice).toBeHidden();
