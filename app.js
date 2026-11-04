@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'state-cv-data-v1';
 const APP_NAME = 'State CV';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+const PREMIGRATION_KEY = 'state-cv-premigration-v1';
 const MAX_PDF_IMPORT_BYTES = 10 * 1024 * 1024;
 const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
 const MAX_EXPERIENCE_ENTRIES = 30;
@@ -22,8 +23,8 @@ const defaultData = {
   basics: { name: '', title: '', location: '', email: '', phone: '', website: '' },
   exportName: '',
   summary: '',
-  experience: [{ role: '', company: '', dates: '', highlights: '' }],
-  education: [{ degree: '', school: '', dates: '' }],
+  experience: [blankExperience()],
+  education: [blankEducation()],
   skills: ''
 };
 
@@ -45,7 +46,9 @@ let appVersionRequestId = 0;
 let persistenceResult = 'unknown';
 let persistenceRequestStarted = false;
 let lastSnapshotAt = Date.now();
+let pendingV1Raw = null;
 let resumeData = loadData();
+migratePendingV1();
 let saveTimer;
 const BACKUP_REMINDER_KEY = 'state-cv-backup-reminder-v1';
 const BACKUP_REMINDER_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -100,7 +103,56 @@ const setValue = (path, value) => {
   target[lastKey] = value;
 };
 
-function normalizeData(data, { strict = false } = {}) {
+function createEntryId(prefix) {
+  const random = typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `${prefix}${random}`;
+}
+
+function assignEntryIds(records, prefix, makeId) {
+  const seen = new Set();
+  const makeUniqueId = () => {
+    let id = '';
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      id = String(makeId(prefix) ?? '');
+      if (id && !seen.has(id)) return id;
+    }
+    let extra = seen.size + 1;
+    do {
+      id = `${prefix}id${extra}`;
+      extra += 1;
+    } while (!id || seen.has(id));
+    return id;
+  };
+  return (Array.isArray(records) ? records : []).map((record) => {
+    const source = record && typeof record === 'object' && !Array.isArray(record) ? record : {};
+    const next = { ...source };
+    const current = source.id;
+    const reusable = typeof current === 'string' && current.length > 0 && !seen.has(current);
+    const id = reusable ? current : makeUniqueId();
+    seen.add(id);
+    next.id = id;
+    return next;
+  });
+}
+
+function blankExperience() {
+  return { id: createEntryId('exp_'), role: '', company: '', dates: '', highlights: '' };
+}
+
+function blankEducation() {
+  return { id: createEntryId('edu_'), degree: '', school: '', dates: '' };
+}
+
+function freshResumeData() {
+  const data = structuredClone(defaultData);
+  data.experience = [blankExperience()];
+  data.education = [blankEducation()];
+  return data;
+}
+
+function normalizeData(data, { strict = false, makeId = createEntryId } = {}) {
   const isPlainObject = (value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const prototype = Object.getPrototypeOf(value);
@@ -111,6 +163,16 @@ function normalizeData(data, { strict = false } = {}) {
   if (Object.hasOwn(data, 'schemaVersion')) {
     if (!Number.isInteger(data.schemaVersion) || data.schemaVersion < 1) reject('This backup has an invalid schema version.');
     if (data.schemaVersion > SCHEMA_VERSION) reject('This backup was made by a newer version of State CV.');
+  }
+  const isCurrentSchema = Object.hasOwn(data, 'schemaVersion') && data.schemaVersion === SCHEMA_VERSION;
+  let source = data;
+  if (isCurrentSchema) {
+    if (!isPlainObject(data.master)) {
+      if (strict) reject('master must be an object.');
+      source = {};
+    } else {
+      source = data.master;
+    }
   }
   const normalizeText = (value, field, maxLength) => {
     if (value === undefined) return '';
@@ -146,38 +208,69 @@ function normalizeData(data, { strict = false } = {}) {
         if (strict) reject(`${field} entry ${index + 1} must be an object.`);
         record = {};
       }
-      return Object.fromEntries(fields.map(([key, maxLength]) => [
+      const normalized = Object.fromEntries(fields.map(([key, maxLength]) => [
         key,
         normalizeText(record[key], `${field} ${key}`, maxLength)
       ]));
+      normalized.id = record.id;
+      return normalized;
     });
   };
-  const basicsData = normalizeObject(data.basics, 'basics');
-  const experience = normalizeRecords(data.experience, 'experience', MAX_EXPERIENCE_ENTRIES, [
+  const normalizeVersionList = (value) => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+      if (strict) reject('versions must be an array.');
+      return [];
+    }
+    if (value.length > 20) {
+      if (strict) reject('versions has more than 20 items.');
+      value = value.slice(0, 20);
+    }
+    const kept = [];
+    value.forEach((item) => {
+      if (!isPlainObject(item)) return;
+      if (typeof item.id !== 'string' || typeof item.name !== 'string') return;
+      kept.push({ id: item.id, name: item.name.trim().slice(0, 120) });
+    });
+    return kept;
+  };
+  const basicsData = normalizeObject(source.basics, 'basics');
+  const experience = normalizeRecords(source.experience, 'experience', MAX_EXPERIENCE_ENTRIES, [
     ['role', 200], ['company', 200], ['dates', 100], ['highlights', 10000]
   ]);
-  const education = normalizeRecords(data.education, 'education', MAX_EDUCATION_ENTRIES, [
+  const education = normalizeRecords(source.education, 'education', MAX_EDUCATION_ENTRIES, [
     ['degree', 200], ['school', 200], ['dates', 100]
   ]);
   return {
-    basics: {
-      name: normalizeText(basicsData.name, 'basics name', 200),
-      title: normalizeText(basicsData.title, 'basics title', 200),
-      location: normalizeText(basicsData.location, 'basics location', 200),
-      email: normalizeText(basicsData.email, 'basics email', 254),
-      phone: normalizeText(basicsData.phone, 'basics phone', 40),
-      website: normalizeText(basicsData.website, 'basics website', 300)
+    master: {
+      basics: {
+        name: normalizeText(basicsData.name, 'basics name', 200),
+        title: normalizeText(basicsData.title, 'basics title', 200),
+        location: normalizeText(basicsData.location, 'basics location', 200),
+        email: normalizeText(basicsData.email, 'basics email', 254),
+        phone: normalizeText(basicsData.phone, 'basics phone', 40),
+        website: normalizeText(basicsData.website, 'basics website', 300)
+      },
+      exportName: normalizeText(source.exportName, 'exportName', 120),
+      summary: normalizeText(source.summary, 'summary', 500),
+      experience: assignEntryIds(
+        experience.length ? experience : [{ role: '', company: '', dates: '', highlights: '' }],
+        'exp_',
+        makeId
+      ),
+      education: assignEntryIds(
+        education.length ? education : [{ degree: '', school: '', dates: '' }],
+        'edu_',
+        makeId
+      ),
+      skills: normalizeText(source.skills, 'skills', 2000)
     },
-    exportName: normalizeText(data.exportName, 'exportName', 120),
-    summary: normalizeText(data.summary, 'summary', 500),
-    experience: experience.length ? experience : [{ role: '', company: '', dates: '', highlights: '' }],
-    education: education.length ? education : [{ degree: '', school: '', dates: '' }],
-    skills: normalizeText(data.skills, 'skills', 2000)
+    versions: isCurrentSchema ? normalizeVersionList(data.versions) : []
   };
 }
 
 function toStorable() {
-  return { schemaVersion: SCHEMA_VERSION, ...resumeData };
+  return { schemaVersion: SCHEMA_VERSION, master: resumeData, versions: [] };
 }
 
 function loadData() {
@@ -187,20 +280,62 @@ function loadData() {
   } catch (error) {
     storageLoadFailed = true;
     console.warn('State CV could not read saved data.', error);
-    return structuredClone(defaultData);
+    return freshResumeData();
   }
   if (raw === null) {
     loadedRevision = 0;
-    return structuredClone(defaultData);
+    return freshResumeData();
   }
   try {
     const parsed = JSON.parse(raw);
     loadedRevision = stateStorage.getDataRevision(STORAGE_KEY);
-    return normalizeData(parsed, { strict: true });
+    const normalized = normalizeData(parsed, { strict: true });
+    const legacy = !Object.hasOwn(parsed, 'schemaVersion') || parsed.schemaVersion === 1;
+    if (legacy) pendingV1Raw = raw;
+    return normalized.master;
   } catch (error) {
     preserveDamagedData(raw, error);
-    return structuredClone(defaultData);
+    return freshResumeData();
   }
+}
+
+function migratePendingV1() {
+  if (!pendingV1Raw) return;
+  const raw = pendingV1Raw;
+  pendingV1Raw = null;
+  try {
+    if (stateStorage.getItem(PREMIGRATION_KEY) === null) {
+      stateStorage.setItem(PREMIGRATION_KEY, raw);
+    }
+  } catch (error) {
+    abortV1Migration(error);
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+    takeSnapshot(parsed, loadedRevision);
+  } catch (error) {
+    abortV1Migration(error);
+    return;
+  }
+  try {
+    const stored = { ...toStorable(), savedAt: new Date().toISOString() };
+    loadedRevision = stateStorage.writeData(STORAGE_KEY, stored, loadedRevision);
+  } catch (error) {
+    if (error.code === 'conflict') {
+      showStorageConflict(error.actualRevision);
+      setStatus('error', 'Changes need your attention');
+      return;
+    }
+    abortV1Migration(error);
+  }
+}
+
+function abortV1Migration(error) {
+  storageLoadFailed = true;
+  storageWriteFailed = true;
+  console.error('State CV could not migrate saved data to the current format.', error);
 }
 
 function preserveDamagedData(raw, cause) {
@@ -319,13 +454,24 @@ function takeSnapshot(data = toStorable(), revision = loadedRevision, minimumInt
   let snapshots;
   try {
     const normalizedData = normalizeData(data, { strict: true });
+    const masterKey = (master) => {
+      const copy = structuredClone(master);
+      ['experience', 'education'].forEach((listName) => {
+        copy[listName] = (Array.isArray(copy[listName]) ? copy[listName] : []).map((record) => {
+          const next = { ...(record && typeof record === 'object' ? record : {}) };
+          delete next.id;
+          return next;
+        });
+      });
+      return JSON.stringify(copy);
+    };
     snapshots = stateStorage.readSnapshots();
-    const serializedData = JSON.stringify(normalizedData);
-    if (serializedData === JSON.stringify(defaultData)) return;
+    const serializedData = masterKey(normalizedData.master);
+    if (serializedData === masterKey(defaultData)) return;
     const newestSnapshot = snapshots.at(-1);
     if (newestSnapshot?.data) {
       try {
-        if (JSON.stringify(normalizeData(newestSnapshot.data, { strict: true })) === serializedData) return;
+        if (masterKey(normalizeData(newestSnapshot.data, { strict: true }).master) === serializedData) return;
       } catch (error) {
         console.error('State CV could not compare the latest snapshot before adding another.', error);
       }
@@ -353,8 +499,12 @@ function snapshotLatestStored(minimumIntervalMs = 0) {
   }
   const parsed = JSON.parse(raw);
   const revision = stateStorage.getDataRevision(STORAGE_KEY);
-  const data = normalizeData(parsed, { strict: true });
-  takeSnapshot({ schemaVersion: SCHEMA_VERSION, ...data }, revision, minimumIntervalMs);
+  const normalized = normalizeData(parsed, { strict: true });
+  takeSnapshot({
+    schemaVersion: SCHEMA_VERSION,
+    master: normalized.master,
+    versions: []
+  }, revision, minimumIntervalMs);
   return true;
 }
 
@@ -673,7 +823,7 @@ function renderYourDataDialog() {
   let damaged = damagedRaw;
   let storedDataRaw = null;
   try {
-    ['state-cv-data-v1', 'state-cv-snapshots-v1', 'state-cv-damaged-v1', 'state-cv-persistence-v1'].forEach((key) => {
+    ['state-cv-data-v1', 'state-cv-snapshots-v1', 'state-cv-damaged-v1', 'state-cv-persistence-v1', 'state-cv-premigration-v1'].forEach((key) => {
       const value = stateStorage.getItem(key);
       if (value !== null) {
         approxBytes += (key.length + value.length) * 2;
@@ -772,7 +922,7 @@ function restoreSnapshot(index, normalizedData) {
     }
     cancelScheduledSave();
     hideUndoToast();
-    resumeData = structuredClone(normalizedData);
+    resumeData = structuredClone(normalizedData.master);
     document.querySelector('#exportFilename').removeAttribute('data-edited');
     renderFields(); updatePreview(); updateCompletion();
     const saved = saveData({ force: storageLoadFailed || storageDamaged });
@@ -825,7 +975,7 @@ function clearAllData() {
   try {
     cancelScheduledSave();
     stateStorage.clearAll();
-    resumeData = structuredClone(defaultData);
+    resumeData = freshResumeData();
     loadedRevision = 0;
     storageLoadFailed = false;
     storageDamaged = false;
@@ -874,7 +1024,7 @@ function reloadLatestData() {
     const raw = stateStorage.getItem(STORAGE_KEY);
     if (raw === null) {
       cancelScheduledSave();
-      resumeData = structuredClone(defaultData);
+      resumeData = freshResumeData();
       loadedRevision = 0;
       storageLoadFailed = false;
       storageDamaged = false;
@@ -886,7 +1036,7 @@ function reloadLatestData() {
       const normalized = normalizeData(parsed, { strict: true });
       loadedRevision = stateStorage.getDataRevision(STORAGE_KEY);
       cancelScheduledSave();
-      resumeData = normalized;
+      resumeData = normalized.master;
     }
     storageLoadFailed = false;
     storageDamaged = false;
@@ -974,8 +1124,8 @@ function renderFields() {
 }
 
 function renderRepeaters() {
-  renderRepeater('experienceList', 'experienceTemplate', resumeData.experience, () => structuredClone(defaultData.experience[0]));
-  renderRepeater('educationList', 'educationTemplate', resumeData.education, () => structuredClone(defaultData.education[0]));
+  renderRepeater('experienceList', 'experienceTemplate', resumeData.experience, blankExperience);
+  renderRepeater('educationList', 'educationTemplate', resumeData.education, blankEducation);
 }
 
 function expandedFlags(type, count) {
@@ -1042,9 +1192,7 @@ function addEntry(type) {
     return;
   }
   const flags = expandedFlags(type, items.length);
-  items.push(type === 'experience'
-    ? { role: '', company: '', dates: '', highlights: '' }
-    : { degree: '', school: '', dates: '' });
+  items.push(type === 'experience' ? blankExperience() : blankEducation());
   flags.push(true);
   rememberExpanded(type, flags);
   renderRepeaters();
@@ -1365,7 +1513,7 @@ function confirmReplacingSavedCv() {
     return window.confirm(unreadableMessage);
   }
   try {
-    if (isBlankCv(normalizeData(parsed, { strict: true }))) return true;
+    if (isBlankCv(normalizeData(parsed, { strict: true }).master)) return true;
   } catch (error) {
     return window.confirm(unreadableMessage);
   }
@@ -1394,7 +1542,7 @@ function startNewCv({ confirmReplacement = true } = {}) {
     return;
   }
   hideUndoToast();
-  resumeData = structuredClone(defaultData);
+  resumeData = freshResumeData();
   document.querySelector('#exportFilename').removeAttribute('data-edited');
   renderFields(); updatePreview(); updateCompletion();
   showEditorSection('contact');
@@ -1653,7 +1801,7 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
       cancelScheduledSave();
       takeSnapshot();
       hideUndoToast();
-      resumeData = normalized;
+      resumeData = normalized.master;
       document.querySelector('#exportFilename').removeAttribute('data-edited');
       renderFields(); updatePreview(); updateCompletion();
       showEditorSection('contact');
@@ -1708,8 +1856,13 @@ if (storageDamaged) {
   setStatus('error', 'Not saving: damaged data');
 }
 else if (storageLoadFailed) {
-  showStorageUnavailableNotice();
-  setImportStatus('Saved data could not be loaded; saving is blocked', true);
+  showStorageUnavailableNotice(storageWriteFailed
+    ? 'Browser storage could not be written. Changes are not being saved.'
+    : undefined);
+  setImportStatus(
+    storageWriteFailed ? 'Not saving: storage unavailable' : 'Saved data could not be loaded; saving is blocked',
+    true
+  );
 }
 updateBackupReminderNotice();
 if (persistenceResult !== 'granted' && hasSavedDraft()) requestStoragePersistence();

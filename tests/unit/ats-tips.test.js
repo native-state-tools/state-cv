@@ -64,6 +64,8 @@ test('a complete CV gives no tips', () => {
   const data = completeCv();
   data.experience.push({ role: '', company: '', dates: '', highlights: '' });
   data.education.push({ degree: '', school: '', dates: '' });
+  data.experience[0].id = 'exp_\u0141secret';
+  data.education[0].id = 'edu_secret';
   assert.deepEqual(plain(getAtsTips(data)), []);
 });
 

@@ -323,7 +323,7 @@ function importPdfLines(lines) {
   const importedExperience = parseExperience(sections.experience);
   const importedEducation = parseEducation(sections.education);
   const detectedBasics = { name, title, location, email, phone, website };
-  resumeData = structuredClone(defaultData);
+  resumeData = freshResumeData();
   resumeData.basics = { ...resumeData.basics, ...detectedBasics };
   resumeData.exportName = name ? `${name} CV` : 'CV';
   document.querySelector('#exportFilename').removeAttribute('data-edited');
@@ -331,7 +331,7 @@ function importPdfLines(lines) {
   if (sections.skills?.length) resumeData.skills = splitSkills(sections.skills);
   if (importedExperience.length) resumeData.experience = importedExperience;
   if (importedEducation.length) resumeData.education = importedEducation;
-  resumeData = normalizeData(resumeData, { strict: false });
+  resumeData = normalizeData(resumeData, { strict: false }).master;
   renderFields();
   updatePreview();
   updateCompletion();

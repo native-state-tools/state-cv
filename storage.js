@@ -146,6 +146,7 @@
           'state-cv-snapshots-v1',
           'state-cv-damaged-v1',
           'state-cv-persistence-v1',
+          'state-cv-premigration-v1',
           'state-cv-data-v1'
         ];
         const previous = new Map(keys.map((key) => [key, target.getItem(key)]));

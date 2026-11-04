@@ -106,7 +106,8 @@ test('clearAll removes all State CV keys and rolls back if a removal fails', () 
     'state-cv-data-v1',
     'state-cv-snapshots-v1',
     'state-cv-damaged-v1',
-    'state-cv-persistence-v1'
+    'state-cv-persistence-v1',
+    'state-cv-premigration-v1'
   ];
   keys.forEach((key) => fake.setItem(key, `saved:${key}`));
 

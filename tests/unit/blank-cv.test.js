@@ -5,12 +5,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const appSource = fs.readFileSync(path.join(__dirname, '../../app.js'), 'utf8');
-const helperStart = appSource.indexOf('function isBlankCv(data) {');
+const helperStart = appSource.indexOf('function isBlankPlaceholder(listName, record) {');
 const helperEnd = appSource.indexOf('\nfunction showUndoToast(', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'Could not isolate isBlankCv from app.js');
 
 const sandbox = vm.createContext({});
-vm.runInContext(`${appSource.slice(helperStart, helperEnd)}\nglobalThis.isBlankCv = isBlankCv;`, sandbox);
+vm.runInContext([
+  appSource.slice(helperStart, helperEnd),
+  'globalThis.isBlankCv = isBlankCv;',
+  'globalThis.isBlankPlaceholder = isBlankPlaceholder;'
+].join('\n'), sandbox);
 
 const emptyCv = {
   basics: { name: '', title: '', location: '', email: '', phone: '', website: '' },
@@ -39,4 +43,16 @@ test('isBlankCv is true for an empty saved CV and false when any field has text'
   }), false);
   assert.equal(sandbox.isBlankCv(null), false);
   assert.equal(sandbox.isBlankCv({ ...emptyCv, experience: 'not a list' }), false);
+});
+
+test('isBlankPlaceholder ignores entry ids', () => {
+  assert.equal(sandbox.isBlankPlaceholder('experience', {
+    id: 'exp_secret', role: '', company: '', dates: '', highlights: ''
+  }), true);
+  assert.equal(sandbox.isBlankPlaceholder('education', {
+    id: 'edu_secret', degree: '', school: '', dates: ''
+  }), true);
+  assert.equal(sandbox.isBlankPlaceholder('experience', {
+    id: 'exp_secret', role: 'Analyst', company: '', dates: '', highlights: ''
+  }), false);
 });
