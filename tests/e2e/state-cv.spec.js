@@ -858,11 +858,12 @@ test('WCAG contrast for text, controls, focus, links, placeholders, and notices 
     const darkButtonStyle = getComputedStyle(darkButton);
     add('dark button text', darkButtonStyle.color, darkButtonStyle.backgroundColor);
     add('dark button border', darkButtonStyle.borderTopColor, darkButtonStyle.backgroundColor, 3);
-    for (const selector of ['.paper-size-control', '.filename-control']) {
-      const control = document.querySelector(selector);
-      const style = getComputedStyle(control);
-      add(`${selector.slice(1)} border`, style.borderTopColor, composite(style.backgroundColor, topbar), 3);
-    }
+    const track = document.querySelector('.segmented-track');
+    const trackStyle = getComputedStyle(track);
+    add('segmented track border', trackStyle.borderTopColor, composite(trackStyle.backgroundColor, paper), 3);
+    const filenameBox = document.querySelector('.filename-box');
+    const filenameStyle = getComputedStyle(filenameBox);
+    add('filename box border', filenameStyle.borderTopColor, composite(filenameStyle.backgroundColor, paper), 3);
     const launchCard = document.querySelector('.launch-card');
     add('launch action border', getComputedStyle(launchCard).borderTopColor, composite(getComputedStyle(launchCard).backgroundColor, canvas), 3);
     const quickAction = document.querySelector('.quick-action');
@@ -872,7 +873,13 @@ test('WCAG contrast for text, controls, focus, links, placeholders, and notices 
     gradientColors.forEach((background, index) =>
       add(`PDF import action border (gradient stop ${index + 1})`, quickActionStyle.borderTopColor, background, 3));
     add('accent button text', color('.button-accent'), getComputedStyle(document.querySelector('.button-accent')).backgroundColor);
-    add('caution button text', color('.button-caution'), getComputedStyle(document.querySelector('.button-caution')).backgroundColor);
+    const danger = document.querySelector('#clearDataButton');
+    const dangerStyle = getComputedStyle(danger);
+    const dangerBackground = composite(dangerStyle.backgroundColor, paper);
+    add('danger button text', dangerStyle.color, dangerBackground);
+    add('danger button border', dangerStyle.borderTopColor, dangerBackground, 3);
+    const selected = document.querySelector('.segmented-option input:checked');
+    add('selected segment text', getComputedStyle(selected.nextElementSibling).color, getComputedStyle(selected).backgroundColor);
     add('brand link', color('.brand'), topbar);
     add('field placeholder', color('.field input', '::placeholder'), composite(getComputedStyle(document.querySelector('.field input')).backgroundColor, paper));
     const field = document.querySelector('.field input');
@@ -976,7 +983,7 @@ test('PDF export of a filled CV keeps reading order and omits placeholders', asy
 test('plain text download contains the CV in reading order', async ({ page }) => {
   await openStoredCv(page, filledCv);
   await page.locator('.more-menu > summary').click();
-  await expect(page.locator('#textSize')).toHaveValue('standard');
+  await expect(page.locator('input[name="textSize"]:checked')).toHaveValue('standard');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download .txt' }).click();
   const download = await downloadPromise;
@@ -1017,15 +1024,26 @@ test('Text size Large increases the preview bullet size', async ({ page, isMobil
   const standardSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.locator('.more-menu > summary').click();
-  await page.locator('#textSize').selectOption('compact');
+  await page.locator('input[name="paperSize"][value="letter"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('input[name="paperSize"]:checked')).toHaveValue('a4');
+  await expect(page.locator('#moreMenuContent')).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('input[name="paperSize"]:checked')).toHaveValue('letter');
+  expect(await page.locator('#formatLabel').textContent()).toContain('Letter');
+  await page.locator('input[name="textSize"][value="compact"]').check();
+  await expect(page.locator('#moreMenuContent')).toBeVisible();
   await expect(preview).toHaveClass(/preview-text-compact/);
+  await page.keyboard.press('Escape');
   if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const compactSummary = await summary.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.locator('.more-menu > summary').click();
-  await page.locator('#textSize').selectOption('large');
+  await page.locator('input[name="textSize"][value="large"]').check();
+  await expect(page.locator('#moreMenuContent')).toBeVisible();
   await expect(preview).toHaveClass(/preview-text-large/);
   await expect(preview).not.toHaveClass(/preview-text-standard/);
+  await page.keyboard.press('Escape');
   if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const largeSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   const largeSummary = await summary.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
