@@ -17,7 +17,7 @@ Contact: [hello@nativestatetools.com](mailto:hello@nativestatetools.com)
 1. Start a new CV, or import a PDF or a JSON backup. PDF import is on the start screen and in the editor. JSON backups use **Import**.
 2. Edit contact details, summary, experience, education, and skills. The preview updates as you type, and edits save in this browser.
 3. Check the ATS tips above the form.
-4. Choose **Export PDF**, or open **More** and use **Copy as plain text** or **Download .txt**. Open **More** and pick a **Version** to export a shorter copy of the same CV. A version only chooses which entries to show. Editing still changes the master CV.
+4. Choose **Export PDF**, or open **More** and use **Copy as plain text** or **Download .txt**. Open **More** and pick a **Version** to export a shorter copy of the same CV. A version can hide entries, bullets, and skills, and it can use its own title, summary, and file name. Editing still changes the master CV.
 5. Download a backup from **More** (**Backup (JSON)**) or from **Your data** (**Download backup**).
 
 If the saved CV has real content, importing a PDF or a JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under **Recent snapshots**. A blank saved CV, such as one from **Start a new CV** or **Start new CV** with nothing typed, does not ask. If the saved data could not be read, the question says that no snapshot copy is available.

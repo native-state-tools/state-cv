@@ -5,6 +5,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 const createStorage = require('../../storage.js');
 
+function storedVersion(fields) {
+  return {
+    hiddenBullets: {},
+    hiddenSkills: [],
+    title: '',
+    summary: '',
+    exportName: '',
+    ...fields
+  };
+}
+
 const appSource = fs.readFileSync(path.join(__dirname, '../../app.js'), 'utf8');
 const requiredConstants = ['SCHEMA_VERSION', 'MAX_EXPERIENCE_ENTRIES', 'MAX_EDUCATION_ENTRIES', 'MAX_VERSIONS', 'ENTRY_ID_PATTERN'];
 const declarations = requiredConstants.map((name) => {
@@ -101,7 +112,7 @@ test('v2 round trip keeps ids and versions unchanged', () => {
   assert.deepEqual(plain(twice), plain(once));
   assert.equal(once.master.experience[0].id, 'exp_keep');
   assert.equal(once.master.education[0].id, 'edu_keep');
-  assert.deepEqual(plain(once.versions), [{ id: 'ver_1', name: 'Frontend at Acme', hiddenEntries: [] }]);
+  assert.deepEqual(plain(once.versions), [storedVersion({ id: 'ver_1', name: 'Frontend at Acme', hiddenEntries: [] })]);
 });
 
 test('missing, duplicate, and non-string entry ids are replaced and valid ids are kept', () => {
@@ -154,9 +165,9 @@ test('versions must be an array, bad items are dropped, and more than 50 is reje
     ]
   }, { strict: true }).versions;
   assert.deepEqual(plain(versions), [
-    { id: 'ver_ok', name: 'Frontend', hiddenEntries: [] },
-    { id: 'ver_long', name: 'N'.repeat(120), hiddenEntries: [] },
-    { id: 'ver_blank', name: 'Untitled version', hiddenEntries: [] }
+    storedVersion({ id: 'ver_ok', name: 'Frontend', hiddenEntries: [] }),
+    storedVersion({ id: 'ver_long', name: 'N'.repeat(120), hiddenEntries: [] }),
+    storedVersion({ id: 'ver_blank', name: 'Untitled version', hiddenEntries: [] })
   ]);
 
   const tooMany = Array.from({ length: 51 }, (_, index) => ({ id: `ver_${index}`, name: `Version ${index}` }));

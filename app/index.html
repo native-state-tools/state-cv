@@ -99,6 +99,16 @@
               <fieldset class="version-entries" id="versionEntries" hidden inert>
                 <legend>Show in this version</legend>
                 <div class="version-entry-list" id="versionEntryList"></div>
+                <details class="version-group" id="versionSkills">
+                  <summary>Skills</summary>
+                  <div class="version-choice-list" id="versionSkillList"></div>
+                </details>
+                <details class="version-group" id="versionCopy">
+                  <summary>Title and summary</summary>
+                  <p class="versions-hint">Leave blank to use your master CV.</p>
+                  <label class="field" for="versionTitle"><span>Title for this version</span><input id="versionTitle" type="text" maxlength="200" autocomplete="off" enterkeyhint="next" spellcheck="true" /></label>
+                  <label class="field" for="versionSummary"><span>Summary for this version <b class="character-count" id="versionSummaryCount">0 / 500</b></span><textarea id="versionSummary" maxlength="500" rows="4" enterkeyhint="enter"></textarea></label>
+                </details>
               </fieldset>
             </div>
             <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
