@@ -1796,3 +1796,100 @@ test('Landing page opens from file://', async ({ page }, testInfo) => {
   await page.goto(pathToFileURL(indexPath).href);
   await expect(page.getByRole('heading', { level: 1, name: 'Build your CV. Keep it yours.' })).toBeVisible();
 });
+
+async function openVersions(page) {
+  const edit = page.getByRole('button', { name: 'Edit', exact: true });
+  if (await edit.isVisible() && await edit.getAttribute('aria-pressed') !== 'true') await edit.click();
+  const menu = page.locator('.more-menu');
+  if (!(await menu.evaluate((element) => element.open))) await page.locator('.more-menu summary').click();
+  await expect(page.getByLabel('Version', { exact: true })).toBeVisible();
+}
+
+async function expectVersionPreview(page, { present, absent } = {}) {
+  const previewButton = page.getByRole('button', { name: 'Preview', exact: true });
+  if (await previewButton.isVisible()) await previewButton.click();
+  const preview = page.locator('#resumePreview');
+  await expect(preview).toBeVisible();
+  if (present) await expect(preview).toContainText(present);
+  if (absent) await expect(preview).not.toContainText(absent);
+}
+
+test('versions hide one experience entry in preview and plain text, then survive reload, rename, duplicate, and delete with undo', async ({ page }) => {
+  test.setTimeout(60000);
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Alex Morgan');
+  await openSection(page, 'Experience');
+  await page.getByLabel('Job title').fill('Visible Role');
+  await page.getByLabel('Company').fill('Visible Co');
+  await page.getByRole('button', { name: 'Add experience' }).click();
+  await page.getByLabel('Job title').nth(1).fill('Hidden Role');
+  await page.getByLabel('Company').nth(1).fill('Hidden Co');
+  await expect(page.locator('#saveStatus')).toContainText('Saved locally');
+
+  await openVersions(page);
+  await expect(page.getByRole('button', { name: 'Rename', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Duplicate', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'New version', exact: true }).click();
+  await expect(page.locator('#versionSelect option:checked')).toHaveText('Untitled version');
+  await expect(page.locator('#versionEditHint')).toHaveText('Edits change your master CV.');
+  await expect(page.locator('#exportFilename')).toHaveValue('Alex Morgan CV - Untitled version');
+  await expect(page.getByLabel('Version', { exact: true })).toBeFocused();
+
+  const hiddenBox = page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' });
+  await expect(hiddenBox).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Visible Role, Visible Co' })).toBeChecked();
+  await hiddenBox.uncheck();
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
+    const version = data.versions && data.versions[0];
+    const hiddenId = data.master && data.master.experience && data.master.experience[1] && data.master.experience[1].id;
+    return Boolean(version && hiddenId && version.hiddenEntries.includes(hiddenId) && data.master.experience[1].role === 'Hidden Role');
+  })).toBe(true);
+
+  await expectVersionPreview(page, { present: 'Visible Role', absent: 'Hidden Role' });
+
+  await openVersions(page);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download .txt' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('Alex Morgan CV - Untitled version.txt');
+  const content = await fs.readFile(await download.path(), 'utf8');
+  expect(content).toContain('Visible Role');
+  expect(content).not.toContain('Hidden Role');
+
+  await openVersions(page);
+  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Master CV' });
+  await expectVersionPreview(page, { present: 'Hidden Role' });
+
+  await page.reload();
+  await enterEditor(page);
+  await openVersions(page);
+  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Untitled version' });
+  await expect(page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' })).not.toBeChecked();
+  await expectVersionPreview(page, { present: 'Visible Role', absent: 'Hidden Role' });
+
+  await openVersions(page);
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await page.getByLabel('Version name').fill('Acme role');
+  await page.getByRole('button', { name: 'Save name', exact: true }).click();
+  await expect(page.locator('#versionSelect option:checked')).toHaveText('Acme role');
+  await page.getByRole('button', { name: 'Duplicate', exact: true }).click();
+  await expect(page.locator('#versionSelect option:checked')).toHaveText('Acme role copy');
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.locator('#undoToast')).toContainText('Version removed');
+  await expect(page.locator('#versionSelect option:checked')).toHaveText('Master CV');
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.locator('#versionSelect option:checked')).toHaveText('Acme role copy');
+  await expect(page.getByLabel('Version', { exact: true })).toBeFocused();
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
+    return (data.versions || []).map((version) => version.name).join('|');
+  })).toBe('Acme role|Acme role copy');
+  const roles = await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
+    return data.master.experience.map((item) => item.role);
+  });
+  expect(roles).toEqual(['Visible Role', 'Hidden Role']);
+});

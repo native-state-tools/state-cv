@@ -332,6 +332,8 @@ function importPdfLines(lines) {
   if (importedExperience.length) resumeData.experience = importedExperience;
   if (importedEducation.length) resumeData.education = importedEducation;
   resumeData = normalizeData(resumeData, { strict: false }).master;
+  cvVersions = [];
+  activeVersionId = null;
   renderFields();
   updatePreview();
   updateCompletion();

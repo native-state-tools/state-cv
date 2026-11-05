@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const exportSource = fs.readFileSync(path.join(__dirname, '../../cv-export.js'), 'utf8');
 const helperStart = exportSource.indexOf('function toPdfText(text) {');
-const helperEnd = exportSource.indexOf('\nfunction exportPdf() {', helperStart);
+const helperEnd = exportSource.indexOf('\nfunction exportPdf(data) {', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'Could not isolate PDF text helpers from cv-export.js');
 
 const sandbox = vm.createContext({});

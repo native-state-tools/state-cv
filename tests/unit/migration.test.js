@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const createStorage = require('../../storage.js');
 
 const appSource = fs.readFileSync(path.join(__dirname, '../../app.js'), 'utf8');
-const requiredConstants = ['SCHEMA_VERSION', 'MAX_EXPERIENCE_ENTRIES', 'MAX_EDUCATION_ENTRIES'];
+const requiredConstants = ['SCHEMA_VERSION', 'MAX_EXPERIENCE_ENTRIES', 'MAX_EDUCATION_ENTRIES', 'MAX_VERSIONS', 'ENTRY_ID_PATTERN'];
 const declarations = requiredConstants.map((name) => {
   const match = appSource.match(new RegExp(`^const ${name} = [^\\n]+;$`, 'm'));
   assert.ok(match, `Could not find ${name} in app.js`);
@@ -101,7 +101,7 @@ test('v2 round trip keeps ids and versions unchanged', () => {
   assert.deepEqual(plain(twice), plain(once));
   assert.equal(once.master.experience[0].id, 'exp_keep');
   assert.equal(once.master.education[0].id, 'edu_keep');
-  assert.deepEqual(plain(once.versions), [{ id: 'ver_1', name: 'Frontend at Acme' }]);
+  assert.deepEqual(plain(once.versions), [{ id: 'ver_1', name: 'Frontend at Acme', hiddenEntries: [] }]);
 });
 
 test('missing, duplicate, and non-string entry ids are replaced and valid ids are kept', () => {
@@ -128,7 +128,7 @@ test('missing, duplicate, and non-string entry ids are replaced and valid ids ar
   assert.deepEqual(plain(result.master.education.map((record) => record.id)), ['edu_keep', 'edu_4']);
 });
 
-test('versions must be an array, bad items are dropped, and more than 20 is rejected', () => {
+test('versions must be an array, bad items are dropped, and more than 50 is rejected', () => {
   assert.throws(
     () => normalizeData({ schemaVersion: 2, master: {}, versions: { id: 'ver_1' } }, { strict: true }),
     /versions must be an array/
@@ -154,21 +154,21 @@ test('versions must be an array, bad items are dropped, and more than 20 is reje
     ]
   }, { strict: true }).versions;
   assert.deepEqual(plain(versions), [
-    { id: 'ver_ok', name: 'Frontend' },
-    { id: 'ver_long', name: 'N'.repeat(120) },
-    { id: 'ver_blank', name: '' }
+    { id: 'ver_ok', name: 'Frontend', hiddenEntries: [] },
+    { id: 'ver_long', name: 'N'.repeat(120), hiddenEntries: [] },
+    { id: 'ver_blank', name: 'Untitled version', hiddenEntries: [] }
   ]);
 
-  const tooMany = Array.from({ length: 21 }, (_, index) => ({ id: `ver_${index}`, name: `Version ${index}` }));
+  const tooMany = Array.from({ length: 51 }, (_, index) => ({ id: `ver_${index}`, name: `Version ${index}` }));
   assert.throws(
     () => normalizeData({ schemaVersion: 2, master: {}, versions: tooMany }, { strict: true }),
-    /more than 20/
+    /more than 50/
   );
   assert.equal(normalizeData({
     schemaVersion: 2,
     master: {},
     versions: tooMany
-  }, { strict: false }).versions.length, 20);
+  }, { strict: false }).versions.length, 50);
 });
 
 test('schemaVersion 3 and other damaged input are still rejected', () => {

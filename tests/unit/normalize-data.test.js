@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const appSource = fs.readFileSync(path.join(__dirname, '../../app.js'), 'utf8');
-const requiredConstants = ['SCHEMA_VERSION', 'MAX_EXPERIENCE_ENTRIES', 'MAX_EDUCATION_ENTRIES'];
+const requiredConstants = ['SCHEMA_VERSION', 'MAX_EXPERIENCE_ENTRIES', 'MAX_EDUCATION_ENTRIES', 'MAX_VERSIONS', 'ENTRY_ID_PATTERN'];
 const declarations = requiredConstants.map((name) => {
   const match = appSource.match(new RegExp(`^const ${name} = [^\\n]+;$`, 'm'));
   assert.ok(match, `Could not find ${name} in app.js`);
