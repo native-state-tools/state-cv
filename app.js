@@ -2369,27 +2369,35 @@ moreMenu.addEventListener('keydown', (event) => {
   }
 });
 moreMenu.querySelectorAll('button, select, input').forEach((control) => {
-  if (control.closest('#versionsPanel')) return;
+  if (control.closest('#versionsPanel') || control.type === 'radio') return;
   control.addEventListener('change', () => closeMoreMenu());
   control.addEventListener('click', () => {
     if (control.tagName === 'BUTTON') closeMoreMenu({ returnFocus: true });
   });
 });
-function updatePrintPageSize(size = document.querySelector('#paperSize').value) {
+function updatePrintPageSize(size = selectedChoice('paperSize', 'letter')) {
   const normalizedSize = size === 'a4' ? 'a4' : 'letter';
   document.documentElement.classList.toggle('page-a4', normalizedSize === 'a4');
   document.documentElement.classList.toggle('page-letter', normalizedSize === 'letter');
   document.querySelector('#formatLabel').textContent = `${normalizedSize === 'a4' ? 'A4' : 'Letter'} / selectable text`;
 }
-function applyPreviewTextSize(size = document.querySelector('#textSize')?.value) {
+function applyPreviewTextSize(size = selectedChoice('textSize', 'standard')) {
   const preview = document.querySelector('#resumePreview');
   if (!preview) return;
   const normalized = Object.hasOwn(PDF_TEXT_SIZES, size) ? size : 'standard';
   preview.classList.remove('preview-text-compact', 'preview-text-standard', 'preview-text-large');
   preview.classList.add(`preview-text-${normalized}`);
 }
-document.querySelector('#paperSize').addEventListener('change', (event) => updatePrintPageSize(event.target.value));
-document.querySelector('#textSize').addEventListener('change', (event) => applyPreviewTextSize(event.target.value));
+document.querySelectorAll('input[name="paperSize"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    if (input.checked) updatePrintPageSize(input.value);
+  });
+});
+document.querySelectorAll('input[name="textSize"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    if (input.checked) applyPreviewTextSize(input.value);
+  });
+});
 document.querySelector('#importPdfButton').addEventListener('click', () => document.querySelector('#pdfInput').click());
 async function handlePdfImport(file) {
   if (!file) return;

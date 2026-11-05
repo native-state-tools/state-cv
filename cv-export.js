@@ -159,8 +159,8 @@ function exportPdf(data) {
     if (unsupportedNote) setImportStatus(unsupportedNote);
 
     const { jsPDF } = window.jspdf;
-    const paperSize = document.querySelector('#paperSize').value === 'a4' ? 'a4' : 'letter';
-    const textSize = document.querySelector('#textSize')?.value;
+    const paperSize = selectedChoice('paperSize', 'letter') === 'a4' ? 'a4' : 'letter';
+    const textSize = selectedChoice('textSize', 'standard');
     const sizes = PDF_TEXT_SIZES[textSize] || PDF_TEXT_SIZES.standard;
     const doc = new jsPDF({ unit: 'pt', format: paperSize, compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -381,4 +381,9 @@ function downloadPlainText(data) {
   const exportData = data && typeof data === 'object' ? data : resumeData;
   savePlainTextFile(cvToPlainText(exportData), exportData);
   setImportStatus('Plain text downloaded.');
+}
+
+function selectedChoice(name, fallback) {
+  const checked = document.querySelector(`input[name="${name}"]:checked`);
+  return checked ? checked.value : fallback;
 }
