@@ -137,7 +137,7 @@
       <section class="editor-panel" aria-label="CV editor" data-sections-collapsed="false">
         <div class="editor-body">
           <nav class="section-nav" aria-label="CV sections">
-            <button class="section-nav-toggle button button-ghost" id="sectionNavToggle" type="button" aria-expanded="true" aria-controls="sectionNavList"><span class="section-nav-toggle-text">Collapse sections</span></button>
+            <button class="section-nav-toggle button button-ghost" id="sectionNavToggle" type="button" aria-expanded="true" aria-controls="sectionNavList" aria-label="Collapse sections"><span class="section-nav-toggle-icon" aria-hidden="true">«</span></button>
             <ol class="section-nav-list" id="sectionNavList">
               <li><button class="section-nav-item" type="button" data-section-target="contact" aria-current="step" aria-label="01. Contact"><span class="section-nav-number">01</span><span class="section-nav-name">Contact</span><span class="section-nav-check" data-section-check="contact" hidden>✓</span></button></li>
               <li><button class="section-nav-item" type="button" data-section-target="summary" aria-label="02. Summary"><span class="section-nav-number">02</span><span class="section-nav-name">Summary</span><span class="section-nav-check" data-section-check="summary" hidden>✓</span></button></li>
@@ -148,19 +148,16 @@
           </nav>
           <div class="editor-main">
             <div class="panel-heading">
-              <div>
-                <p class="eyebrow">CV builder <span class="eyebrow-rule"></span> Private by default</p>
-                <h1>Build a CV<br /><em>that gets read.</em></h1>
-              </div>
+              <h1>Your CV</h1>
               <div class="completion-widget">
                 <div class="completion-ring" id="completionRing"><strong id="completionPercent">0%</strong></div>
                 <div><span>CV strength</span><small id="completionLabel">Add your details</small></div>
               </div>
             </div>
 
-            <div class="quick-actions"><button class="quick-action" id="importPdfButton" type="button"><span class="quick-icon">PDF</span><span><strong>Start from a PDF</strong><small>Extract your existing CV</small></span><span class="quick-arrow">↗</span></button><div class="ats-note"><span class="note-icon">✦</span><div><strong>ATS-ready by default</strong><p>Clean hierarchy and standard headings keep your story readable by screening software.</p></div></div></div>
+            <div class="quick-actions"><button class="quick-action" id="importPdfButton" type="button"><span class="quick-icon">PDF</span><span><strong>Start from a PDF</strong><small>Extract your existing CV</small></span><span class="quick-arrow">↗</span></button></div>
 
-            <details id="atsTips" class="ats-tips" open>
+            <details id="atsTips" class="ats-tips">
               <summary>ATS tips <span id="atsTipsCount" class="ats-tips-count" aria-live="polite"></span></summary>
               <ul id="atsTipsList"></ul>
             </details>
