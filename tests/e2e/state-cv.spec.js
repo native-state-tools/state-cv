@@ -353,7 +353,7 @@ test('desktop section sidebar collapse toggle works', async ({ page, isMobile })
   await expect(page.locator('.section-nav-name', { hasText: 'Experience' })).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(toggle).toHaveText('Expand sections');
+  await expect(toggle).toHaveAttribute('aria-label', 'Expand sections');
   await expect(page.locator('.section-nav-name', { hasText: 'Experience' })).toBeHidden();
   await expect(page.locator('.section-nav-number', { hasText: '03' })).toBeVisible();
   await page.locator('.section-nav').getByRole('button', { name: /Summary$/ }).click();
@@ -365,6 +365,46 @@ test('desktop section sidebar collapse toggle works', async ({ page, isMobile })
   await enterEditor(page);
   await expect(page.locator('#sectionNavToggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.section-nav-name', { hasText: 'Contact' })).toBeVisible();
+});
+
+test('phone preview layout keeps Full name within 260px on an empty CV', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone-390', 'This check is the 390px phone layout');
+  await openApp(page);
+  await enterEditor(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(page.locator('#importPdfButton')).toBeVisible();
+  const emptyTop = await page.getByLabel('Full name').evaluate((field) => field.getBoundingClientRect().top);
+  expect(emptyTop).toBeLessThanOrEqual(260);
+  await page.getByLabel('Full name').fill('Alex Morgan');
+  await expect(page.locator('#importPdfButton')).toBeHidden();
+  const filledTop = await page.getByLabel('Full name').evaluate((field) => field.getBoundingClientRect().top);
+  expect(filledTop).toBeLessThan(emptyTop);
+});
+
+test('desktop preview layout keeps the editor column at least 480px at 1440', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1440', 'This check is the 1440 desktop layout');
+  await openApp(page);
+  await enterEditor(page);
+  const width = await page.locator('.editor-main').evaluate((column) => column.getBoundingClientRect().width);
+  expect(width).toBeGreaterThanOrEqual(480);
+});
+
+test('desktop preview layout keeps the editor column at least 480px at 1280', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1440', 'Resized from the desktop project');
+  await openApp(page);
+  await enterEditor(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const width = await page.locator('.editor-main').evaluate((column) => column.getBoundingClientRect().width);
+  expect(width).toBeGreaterThanOrEqual(480);
+});
+
+test('preview strips a leading dash from a typed bullet', async ({ page, isMobile }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await openSection(page, 'Experience');
+  await page.getByLabel(/^Highlights/).fill('- Led a team');
+  if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.locator('#resumePreview .entry-bullets li')).toHaveText('Led a team');
 });
 
 test('phone-360 section tab row is visible and the bottom bar keeps Edit, Preview, and Export', async ({ page }, testInfo) => {

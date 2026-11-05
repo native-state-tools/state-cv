@@ -2044,9 +2044,10 @@ function updatePreview({ force = false } = {}) {
       top.append(element('strong', 'entry-role', item.role || 'Role'));
       top.append(element('span', 'entry-date', item.dates));
       entry.append(top, element('div', 'entry-company', item.company));
-      if (item.highlights) {
+      const bulletLines = splitBullets(item.highlights);
+      if (bulletLines.length) {
         const bullets = element('ul', 'entry-bullets');
-        item.highlights.split('\n').filter(Boolean).forEach((bullet) => bullets.append(element('li', '', bullet)));
+        bulletLines.forEach((bullet) => bullets.append(element('li', '', bullet)));
         entry.append(bullets);
       }
       section.append(entry);
@@ -2105,6 +2106,7 @@ function updateCompletion() {
   document.querySelector('#completionRing').className = `completion-ring progress-${progress}`;
   updateSectionChecks(status);
   renderAtsTips();
+  updatePdfImportCard();
 }
 
 function updateSectionChecks(status) {
@@ -2142,8 +2144,17 @@ function setSectionNavCollapsed(collapsed) {
   const toggle = document.querySelector('#sectionNavToggle');
   if (!toggle) return;
   toggle.setAttribute('aria-expanded', String(!collapsed));
-  const label = toggle.querySelector('.section-nav-toggle-text');
-  if (label) label.textContent = collapsed ? 'Expand sections' : 'Collapse sections';
+  toggle.setAttribute('aria-label', collapsed ? 'Expand sections' : 'Collapse sections');
+  const icon = toggle.querySelector('.section-nav-toggle-icon');
+  if (icon) icon.textContent = collapsed ? '»' : '«';
+}
+
+function updatePdfImportCard() {
+  const button = document.querySelector('#importPdfButton');
+  if (!button) return;
+  const show = isBlankCv(resumeData);
+  button.hidden = !show;
+  button.inert = !show;
 }
 
 function renderAtsTips() {
