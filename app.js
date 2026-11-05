@@ -6,6 +6,8 @@ const MAX_PDF_IMPORT_BYTES = 10 * 1024 * 1024;
 const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
 const MAX_EXPERIENCE_ENTRIES = 30;
 const MAX_EDUCATION_ENTRIES = 20;
+const MAX_VERSIONS = 50;
+const ENTRY_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const PDF_PARSE_TIMEOUT_MS = 30000;
 const MAX_PDF_PAGES = 20;
 const MAX_PDF_TEXT_CHARS = 200000;
@@ -47,6 +49,8 @@ let persistenceResult = 'unknown';
 let persistenceRequestStarted = false;
 let lastSnapshotAt = Date.now();
 let pendingV1Raw = null;
+let cvVersions = [];
+let activeVersionId = null;
 let resumeData = loadData();
 migratePendingV1();
 let saveTimer;
@@ -55,6 +59,7 @@ const BACKUP_REMINDER_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 let backupReminder = readBackupReminder();
 let backupReminderDismissed = false;
 let pendingEntryRemoval = null;
+let pendingVersionRemoval = null;
 let undoToastTimer = null;
 const entryExpanded = { experience: [], education: [] };
 
@@ -129,7 +134,7 @@ function assignEntryIds(records, prefix, makeId) {
     const source = record && typeof record === 'object' && !Array.isArray(record) ? record : {};
     const next = { ...source };
     const current = source.id;
-    const reusable = typeof current === 'string' && current.length > 0 && !seen.has(current);
+    const reusable = typeof current === 'string' && ENTRY_ID_PATTERN.test(current) && !seen.has(current);
     const id = reusable ? current : makeUniqueId();
     seen.add(id);
     next.id = id;
@@ -216,31 +221,56 @@ function normalizeData(data, { strict = false, makeId = createEntryId } = {}) {
       return normalized;
     });
   };
-  const normalizeVersionList = (value) => {
+  const normalizeVersionList = (value, entryIds) => {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
       if (strict) reject('versions must be an array.');
       return [];
     }
-    if (value.length > 20) {
-      if (strict) reject('versions has more than 20 items.');
-      value = value.slice(0, 20);
+    if (value.length > MAX_VERSIONS) {
+      if (strict) reject(`versions has more than ${MAX_VERSIONS} items.`);
+      value = value.slice(0, MAX_VERSIONS);
     }
+    const seenIds = new Set();
     const kept = [];
     value.forEach((item) => {
       if (!isPlainObject(item)) return;
-      if (typeof item.id !== 'string' || typeof item.name !== 'string') return;
-      kept.push({ id: item.id, name: item.name.trim().slice(0, 120) });
+      if (typeof item.id !== 'string' || !ENTRY_ID_PATTERN.test(item.id) || seenIds.has(item.id)) return;
+      seenIds.add(item.id);
+      const rawName = typeof item.name === 'string' ? item.name.trim() : '';
+      const name = (rawName || 'Untitled version').slice(0, 120);
+      const hiddenEntries = [];
+      const seenHidden = new Set();
+      const hiddenSource = Array.isArray(item.hiddenEntries) ? item.hiddenEntries : [];
+      hiddenSource.forEach((entryId) => {
+        if (typeof entryId !== 'string' || !entryIds.has(entryId) || seenHidden.has(entryId)) return;
+        seenHidden.add(entryId);
+        hiddenEntries.push(entryId);
+      });
+      kept.push({ id: item.id, name, hiddenEntries });
     });
     return kept;
   };
   const basicsData = normalizeObject(source.basics, 'basics');
-  const experience = normalizeRecords(source.experience, 'experience', MAX_EXPERIENCE_ENTRIES, [
+  const experienceRecords = normalizeRecords(source.experience, 'experience', MAX_EXPERIENCE_ENTRIES, [
     ['role', 200], ['company', 200], ['dates', 100], ['highlights', 10000]
   ]);
-  const education = normalizeRecords(source.education, 'education', MAX_EDUCATION_ENTRIES, [
+  const educationRecords = normalizeRecords(source.education, 'education', MAX_EDUCATION_ENTRIES, [
     ['degree', 200], ['school', 200], ['dates', 100]
   ]);
+  const experience = assignEntryIds(
+    experienceRecords.length ? experienceRecords : [{ role: '', company: '', dates: '', highlights: '' }],
+    'exp_',
+    makeId
+  );
+  const education = assignEntryIds(
+    educationRecords.length ? educationRecords : [{ degree: '', school: '', dates: '' }],
+    'edu_',
+    makeId
+  );
+  const entryIds = new Set();
+  experience.forEach((item) => { if (item && typeof item.id === 'string') entryIds.add(item.id); });
+  education.forEach((item) => { if (item && typeof item.id === 'string') entryIds.add(item.id); });
   return {
     master: {
       basics: {
@@ -253,24 +283,35 @@ function normalizeData(data, { strict = false, makeId = createEntryId } = {}) {
       },
       exportName: normalizeText(source.exportName, 'exportName', 120),
       summary: normalizeText(source.summary, 'summary', 500),
-      experience: assignEntryIds(
-        experience.length ? experience : [{ role: '', company: '', dates: '', highlights: '' }],
-        'exp_',
-        makeId
-      ),
-      education: assignEntryIds(
-        education.length ? education : [{ degree: '', school: '', dates: '' }],
-        'edu_',
-        makeId
-      ),
+      experience,
+      education,
       skills: normalizeText(source.skills, 'skills', 2000)
     },
-    versions: isCurrentSchema ? normalizeVersionList(data.versions) : []
+    versions: isCurrentSchema ? normalizeVersionList(data.versions, entryIds) : []
   };
 }
 
 function toStorable() {
-  return { schemaVersion: SCHEMA_VERSION, master: resumeData, versions: [] };
+  const versions = typeof cvVersions !== 'undefined' && Array.isArray(cvVersions) ? cvVersions : [];
+  const entryIds = new Set();
+  if (typeof resumeData !== 'undefined' && resumeData && typeof resumeData === 'object') {
+    ['experience', 'education'].forEach((listName) => {
+      const list = resumeData[listName];
+      if (!Array.isArray(list)) return;
+      list.forEach((item) => {
+        if (item && typeof item.id === 'string') entryIds.add(item.id);
+      });
+    });
+  }
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    master: resumeData,
+    versions: versions.filter((version) => version && typeof version === 'object').map((version) => ({
+      id: version.id,
+      name: version.name,
+      hiddenEntries: (Array.isArray(version.hiddenEntries) ? version.hiddenEntries : []).filter((id) => entryIds.has(id))
+    }))
+  };
 }
 
 function loadData() {
@@ -280,10 +321,14 @@ function loadData() {
   } catch (error) {
     storageLoadFailed = true;
     console.warn('State CV could not read saved data.', error);
+    cvVersions = [];
+    activeVersionId = null;
     return freshResumeData();
   }
   if (raw === null) {
     loadedRevision = 0;
+    cvVersions = [];
+    activeVersionId = null;
     return freshResumeData();
   }
   try {
@@ -292,9 +337,13 @@ function loadData() {
     const normalized = normalizeData(parsed, { strict: true });
     const legacy = !Object.hasOwn(parsed, 'schemaVersion') || parsed.schemaVersion === 1;
     if (legacy) pendingV1Raw = raw;
+    cvVersions = normalized.versions;
+    activeVersionId = null;
     return normalized.master;
   } catch (error) {
     preserveDamagedData(raw, error);
+    cvVersions = [];
+    activeVersionId = null;
     return freshResumeData();
   }
 }
@@ -503,7 +552,7 @@ function snapshotLatestStored(minimumIntervalMs = 0) {
   takeSnapshot({
     schemaVersion: SCHEMA_VERSION,
     master: normalized.master,
-    versions: []
+    versions: normalized.versions
   }, revision, minimumIntervalMs);
   return true;
 }
@@ -694,10 +743,16 @@ function isBlankCv(data) {
 }
 
 function showUndoToast(listName) {
+  if (listName === 'version') pendingEntryRemoval = null;
+  else pendingVersionRemoval = null;
   const toast = document.querySelector('#undoToast');
   const message = document.querySelector('#undoToastMessage');
   if (!toast || !message) return;
-  message.textContent = listName === 'education' ? 'Education entry removed' : 'Experience entry removed';
+  message.textContent = listName === 'education'
+    ? 'Education entry removed'
+    : listName === 'version'
+      ? 'Version removed'
+      : 'Experience entry removed';
   clearTimeout(undoToastTimer);
   toast.hidden = false;
   toast.inert = false;
@@ -720,6 +775,7 @@ function dismissUndoToast({ restoreFocus = false } = {}) {
 
 function hideUndoToast() {
   pendingEntryRemoval = null;
+  pendingVersionRemoval = null;
   dismissUndoToast({ restoreFocus: true });
 }
 
@@ -923,6 +979,8 @@ function restoreSnapshot(index, normalizedData) {
     cancelScheduledSave();
     hideUndoToast();
     resumeData = structuredClone(normalizedData.master);
+    cvVersions = structuredClone(Array.isArray(normalizedData.versions) ? normalizedData.versions : []);
+    activeVersionId = null;
     document.querySelector('#exportFilename').removeAttribute('data-edited');
     renderFields(); updatePreview(); updateCompletion();
     const saved = saveData({ force: storageLoadFailed || storageDamaged });
@@ -976,6 +1034,8 @@ function clearAllData() {
     cancelScheduledSave();
     stateStorage.clearAll();
     resumeData = freshResumeData();
+    cvVersions = [];
+    activeVersionId = null;
     loadedRevision = 0;
     storageLoadFailed = false;
     storageDamaged = false;
@@ -1025,6 +1085,8 @@ function reloadLatestData() {
     if (raw === null) {
       cancelScheduledSave();
       resumeData = freshResumeData();
+      cvVersions = [];
+      activeVersionId = null;
       loadedRevision = 0;
       storageLoadFailed = false;
       storageDamaged = false;
@@ -1037,6 +1099,8 @@ function reloadLatestData() {
       loadedRevision = stateStorage.getDataRevision(STORAGE_KEY);
       cancelScheduledSave();
       resumeData = normalized.master;
+      cvVersions = normalized.versions;
+      activeVersionId = null;
     }
     storageLoadFailed = false;
     storageDamaged = false;
@@ -1095,6 +1159,53 @@ window.addEventListener('storage', (event) => {
 window.addEventListener('beforeunload', flushScheduledSave);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushScheduledSave(); });
 
+function createVersion(name, makeId) {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  const versionName = (trimmed || 'Untitled version').slice(0, 120);
+  const id = String(typeof makeId === 'function' ? makeId('ver_') : '');
+  return { id, name: versionName, hiddenEntries: [] };
+}
+
+function duplicateVersion(version, existingNames, makeId) {
+  const source = version && typeof version === 'object' ? version : {};
+  const rawName = typeof source.name === 'string' ? source.name.trim() : '';
+  const baseName = rawName || 'Untitled version';
+  const taken = new Set();
+  (Array.isArray(existingNames) ? existingNames : []).forEach((existing) => {
+    if (typeof existing === 'string' && existing.trim()) taken.add(existing.trim());
+  });
+  let candidate = `${baseName} copy`;
+  let number = 2;
+  while (taken.has(candidate) && number < 1000) {
+    candidate = `${baseName} copy ${number}`;
+    number += 1;
+  }
+  const hiddenEntries = Array.isArray(source.hiddenEntries)
+    ? source.hiddenEntries.filter((entryId) => typeof entryId === 'string')
+    : [];
+  const id = String(typeof makeId === 'function' ? makeId('ver_') : '');
+  return { id, name: candidate.slice(0, 120), hiddenEntries: hiddenEntries.slice() };
+}
+
+function applyVersion(master, version) {
+  const source = master && typeof master === 'object' && !Array.isArray(master) ? master : {};
+  const next = { ...source };
+  if (source.basics && typeof source.basics === 'object' && !Array.isArray(source.basics)) {
+    next.basics = { ...source.basics };
+  }
+  const copyList = (list) => (Array.isArray(list) ? list.map((item) => (
+    item && typeof item === 'object' ? { ...item } : item
+  )) : []);
+  next.experience = copyList(source.experience);
+  next.education = copyList(source.education);
+  if (!version) return next;
+  const hidden = new Set(Array.isArray(version.hiddenEntries) ? version.hiddenEntries : []);
+  const visible = (list) => list.filter((item) => !(item && typeof item === 'object' && hidden.has(item.id)));
+  next.experience = visible(next.experience);
+  next.education = visible(next.education);
+  return next;
+}
+
 function entryCardTitle(type, item) {
   const record = item && typeof item === 'object' ? item : {};
   const text = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -1121,11 +1232,13 @@ function renderFields() {
   document.querySelectorAll('[data-path]').forEach((field) => { field.value = getValue(field.dataset.path); });
   renderRepeaters();
   updateSummaryCount();
+  renderVersionControls();
 }
 
 function renderRepeaters() {
   renderRepeater('experienceList', 'experienceTemplate', resumeData.experience, blankExperience);
   renderRepeater('educationList', 'educationTemplate', resumeData.education, blankEducation);
+  renderVersionEntries();
 }
 
 function expandedFlags(type, count) {
@@ -1240,6 +1353,9 @@ function renderRepeater(listId, templateId, items, createBlankRecord) {
         item[field.dataset.key] = field.value;
         if (field.dataset.key === 'role' || field.dataset.key === 'company' || field.dataset.key === 'degree' || field.dataset.key === 'school') {
           labelEntryControls(entry, entryType, index, items.length, item);
+          const versionBox = document.querySelector(`#versionEntryList [data-entry-id="${item.id}"]`);
+          const versionText = versionBox && versionBox.parentElement ? versionBox.parentElement.querySelector('span') : null;
+          if (versionText) versionText.textContent = entryCardTitle(entryType, item);
         }
         updatePreview();
         updateCompletion();
@@ -1286,17 +1402,226 @@ function renderRepeater(listId, templateId, items, createBlankRecord) {
 
 function updateSummaryCount() { document.querySelector('#summaryCount').textContent = `${resumeData.summary.length} / 500`; }
 
+function activeVersion() {
+  if (!activeVersionId || !Array.isArray(cvVersions)) return null;
+  return cvVersions.find((version) => version && version.id === activeVersionId) || null;
+}
+
+function currentExportData() {
+  return applyVersion(resumeData, activeVersion());
+}
+
+function focusVersionSelect() {
+  const menu = document.querySelector('.more-menu');
+  if (menu && !menu.open) menu.open = true;
+  const select = document.querySelector('#versionSelect');
+  if (select) select.focus();
+}
+
+function closeVersionRename(returnFocus) {
+  const panel = document.querySelector('#versionRename');
+  if (!panel) return;
+  panel.hidden = true;
+  panel.inert = true;
+  if (returnFocus) {
+    const button = document.querySelector('#renameVersionButton');
+    if (button && !button.disabled) button.focus();
+  }
+}
+
+function renderVersionEntries() {
+  const list = document.querySelector('#versionEntryList');
+  if (!list) return;
+  list.replaceChildren();
+  const version = activeVersion();
+  if (!version) return;
+  const hidden = new Set(Array.isArray(version.hiddenEntries) ? version.hiddenEntries : []);
+  const addEntries = (type, items) => {
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      if (!item || typeof item.id !== 'string') return;
+      const label = document.createElement('label');
+      label.className = 'version-entry';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !hidden.has(item.id);
+      input.dataset.entryId = item.id;
+      const text = document.createElement('span');
+      text.textContent = entryCardTitle(type, item);
+      input.addEventListener('change', () => {
+        const active = activeVersion();
+        if (!active) return;
+        const nextHidden = Array.isArray(active.hiddenEntries) ? active.hiddenEntries.filter((id) => id !== item.id) : [];
+        if (!input.checked) nextHidden.push(item.id);
+        active.hiddenEntries = nextHidden;
+        updatePreview();
+        scheduleSave();
+      });
+      label.append(input, text);
+      list.append(label);
+    });
+  };
+  addEntries('experience', resumeData.experience);
+  addEntries('education', resumeData.education);
+}
+
+function renderVersionControls() {
+  const select = document.querySelector('#versionSelect');
+  if (!select) return;
+  if (activeVersionId && !activeVersion()) activeVersionId = null;
+  const current = activeVersion();
+  select.replaceChildren();
+  const masterOption = document.createElement('option');
+  masterOption.value = '';
+  masterOption.textContent = 'Master CV';
+  select.append(masterOption);
+  (Array.isArray(cvVersions) ? cvVersions : []).forEach((item) => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.name;
+    select.append(option);
+  });
+  select.value = current ? current.id : '';
+  const managing = Boolean(current);
+  const renameButton = document.querySelector('#renameVersionButton');
+  const duplicateButton = document.querySelector('#duplicateVersionButton');
+  const deleteButton = document.querySelector('#deleteVersionButton');
+  if (renameButton) renameButton.disabled = !managing;
+  if (duplicateButton) duplicateButton.disabled = !managing;
+  if (deleteButton) deleteButton.disabled = !managing;
+  const hint = document.querySelector('#versionEditHint');
+  if (hint) {
+    hint.hidden = !managing;
+    hint.inert = !managing;
+  }
+  const entries = document.querySelector('#versionEntries');
+  if (entries) {
+    entries.hidden = !managing;
+    entries.inert = !managing;
+  }
+  if (!managing) closeVersionRename(false);
+  renderVersionEntries();
+}
+
+function defaultExportFilename() {
+  const person = resumeData.basics.name.trim();
+  const base = person ? `${person} CV` : 'Untitled CV';
+  const version = activeVersion();
+  if (version) return `${base} - ${version.name}`;
+  return resumeData.exportName || base;
+}
+
+function createNewVersion() {
+  if (!Array.isArray(cvVersions)) cvVersions = [];
+  if (cvVersions.length >= MAX_VERSIONS) {
+    setImportStatus('You can keep up to 50 versions.');
+    return;
+  }
+  const version = createVersion('Untitled version', createEntryId);
+  cvVersions.push(version);
+  activeVersionId = version.id;
+  closeVersionRename(false);
+  renderVersionControls();
+  updatePreview();
+  scheduleSave('Version created');
+  focusVersionSelect();
+}
+
+function openVersionRename() {
+  const version = activeVersion();
+  const panel = document.querySelector('#versionRename');
+  const input = document.querySelector('#versionRenameInput');
+  if (!version || !panel || !input) return;
+  input.value = version.name;
+  panel.hidden = false;
+  panel.inert = false;
+  input.focus();
+  input.select();
+}
+
+function saveVersionName() {
+  const version = activeVersion();
+  const input = document.querySelector('#versionRenameInput');
+  if (!version || !input) return;
+  const trimmed = input.value.trim();
+  version.name = (trimmed || 'Untitled version').slice(0, 120);
+  closeVersionRename(false);
+  renderVersionControls();
+  updatePreview();
+  scheduleSave('Version renamed');
+  focusVersionSelect();
+}
+
+function duplicateActiveVersion() {
+  const version = activeVersion();
+  if (!version) return;
+  if (cvVersions.length >= MAX_VERSIONS) {
+    setImportStatus('You can keep up to 50 versions.');
+    return;
+  }
+  const copy = duplicateVersion(version, cvVersions.map((item) => item.name), createEntryId);
+  cvVersions.push(copy);
+  activeVersionId = copy.id;
+  closeVersionRename(false);
+  renderVersionControls();
+  updatePreview();
+  scheduleSave('Version duplicated');
+  focusVersionSelect();
+}
+
+function deleteActiveVersion() {
+  const version = activeVersion();
+  if (!version) return;
+  const index = cvVersions.findIndex((item) => item.id === version.id);
+  if (index < 0) return;
+  pendingVersionRemoval = { version: structuredClone(version), index };
+  cvVersions.splice(index, 1);
+  activeVersionId = null;
+  closeVersionRename(false);
+  renderVersionControls();
+  updatePreview();
+  scheduleSave();
+  showUndoToast('version');
+  focusVersionSelect();
+}
+
+function undoVersionRemoval() {
+  const pending = pendingVersionRemoval;
+  if (!pending) return;
+  if (cvVersions.length >= MAX_VERSIONS) {
+    setImportStatus('You can keep up to 50 versions.');
+    return;
+  }
+  pendingVersionRemoval = null;
+  dismissUndoToast();
+  const index = Math.min(Math.max(pending.index, 0), cvVersions.length);
+  cvVersions.splice(index, 0, pending.version);
+  activeVersionId = pending.version.id;
+  renderVersionControls();
+  updatePreview();
+  scheduleSave('Version restored');
+  focusVersionSelect();
+}
+
+function onVersionSelected() {
+  const select = document.querySelector('#versionSelect');
+  const value = select ? select.value : '';
+  activeVersionId = value && cvVersions.some((version) => version.id === value) ? value : null;
+  closeVersionRename(false);
+  renderVersionControls();
+  updatePreview();
+}
+
 function updateWorkspaceName() {
   const name = resumeData.basics.name.trim();
   document.querySelector('#workspaceName').textContent = name ? `${name} CV` : 'Untitled CV';
   const filename = document.querySelector('#exportFilename');
-  if (filename && !filename.dataset.edited) filename.value = resumeData.exportName || (name ? `${name} CV` : 'Untitled CV');
+  if (filename && !filename.dataset.edited) filename.value = defaultExportFilename();
 }
 
 function updatePreview({ force = false } = {}) {
   updateWorkspaceName();
   if (!force && getComputedStyle(document.querySelector('#previewPanel')).display === 'none') return;
-  const { basics, summary, experience, education, skills } = resumeData;
+  const { basics, summary, experience, education, skills } = currentExportData();
   const preview = document.querySelector('#resumePreview');
   preview.replaceChildren();
   const element = (tag, className, text = '') => {
@@ -1543,6 +1868,8 @@ function startNewCv({ confirmReplacement = true } = {}) {
   }
   hideUndoToast();
   resumeData = freshResumeData();
+  cvVersions = [];
+  activeVersionId = null;
   document.querySelector('#exportFilename').removeAttribute('data-edited');
   renderFields(); updatePreview(); updateCompletion();
   showEditorSection('contact');
@@ -1555,7 +1882,8 @@ document.querySelector('#addExperience').addEventListener('click', () => addEntr
 document.querySelector('#addEducation').addEventListener('click', () => addEntry('education'));
 
 async function copyPlainText() {
-  const text = cvToPlainText(resumeData);
+  const exportData = currentExportData();
+  const text = cvToPlainText(exportData);
   try {
     if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
       throw new Error('Clipboard is unavailable.');
@@ -1563,12 +1891,12 @@ async function copyPlainText() {
     await navigator.clipboard.writeText(text);
     setImportStatus('Plain text copied.');
   } catch (error) {
-    savePlainTextFile(text);
+    savePlainTextFile(text, exportData);
     setImportStatus('Clipboard blocked. Plain text downloaded.');
     console.error('State CV could not copy plain text and downloaded it instead.', error);
   }
 }
-document.querySelector('#printButton').addEventListener('click', exportPdf);
+document.querySelector('#printButton').addEventListener('click', () => exportPdf(currentExportData()));
 let editViewScrollY = 0;
 function setMobileView(view) {
   const appShell = document.querySelector('#appShell');
@@ -1647,6 +1975,7 @@ moreMenu.addEventListener('keydown', (event) => {
   }
 });
 moreMenu.querySelectorAll('button, select, input').forEach((control) => {
+  if (control.closest('#versionsPanel')) return;
   control.addEventListener('change', () => closeMoreMenu());
   control.addEventListener('click', () => {
     if (control.tagName === 'BUTTON') closeMoreMenu({ returnFocus: true });
@@ -1721,7 +2050,24 @@ document.querySelector('#pdfInput').addEventListener('change', async (event) => 
 document.querySelector('#exportFilename').addEventListener('input', (event) => { event.target.dataset.edited = 'true'; resumeData.exportName = event.target.value; scheduleSave(); });
 document.querySelector('#exportButton').addEventListener('click', downloadBackup);
 document.querySelector('#copyPlainTextButton').addEventListener('click', copyPlainText);
-document.querySelector('#downloadPlainTextButton').addEventListener('click', downloadPlainText);
+document.querySelector('#downloadPlainTextButton').addEventListener('click', () => downloadPlainText(currentExportData()));
+document.querySelector('#versionSelect').addEventListener('change', onVersionSelected);
+document.querySelector('#newVersionButton').addEventListener('click', createNewVersion);
+document.querySelector('#renameVersionButton').addEventListener('click', openVersionRename);
+document.querySelector('#duplicateVersionButton').addEventListener('click', duplicateActiveVersion);
+document.querySelector('#deleteVersionButton').addEventListener('click', deleteActiveVersion);
+document.querySelector('#versionRenameSave').addEventListener('click', saveVersionName);
+document.querySelector('#versionRenameCancel').addEventListener('click', () => closeVersionRename(true));
+document.querySelector('#versionRenameInput').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    saveVersionName();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeVersionRename(true);
+  }
+});
 document.querySelector('#yourDataButton').addEventListener('click', openYourDataDialog);
 document.querySelector('#closeYourDataButton').addEventListener('click', closeYourDataDialog);
 document.querySelector('#closeYourDataFooterButton').addEventListener('click', closeYourDataDialog);
@@ -1802,6 +2148,8 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
       takeSnapshot();
       hideUndoToast();
       resumeData = normalized.master;
+      cvVersions = normalized.versions;
+      activeVersionId = null;
       document.querySelector('#exportFilename').removeAttribute('data-edited');
       renderFields(); updatePreview(); updateCompletion();
       showEditorSection('contact');
@@ -1830,7 +2178,10 @@ document.querySelector('#reloadLatestButton').addEventListener('click', reloadLa
 document.querySelector('#keepMineButton').addEventListener('click', keepMine);
 document.querySelector('#downloadDamagedButton').addEventListener('click', downloadDamagedData);
 document.querySelector('#dismissStorageNoticeButton').addEventListener('click', () => hideStorageNotice({ dismissed: true }));
-document.querySelector('#undoRemovalButton').addEventListener('click', undoEntryRemoval);
+document.querySelector('#undoRemovalButton').addEventListener('click', () => {
+  if (pendingVersionRemoval) undoVersionRemoval();
+  else undoEntryRemoval();
+});
 document.querySelector('#backupReminderDownload').addEventListener('click', () => {
   downloadBackup();
   hideBackupReminder();

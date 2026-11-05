@@ -145,7 +145,8 @@ function cvToPlainText(data) {
   }
 }
 
-function exportPdf() {
+function exportPdf(data) {
+  const exportData = data && typeof data === 'object' ? data : resumeData;
   setImportStatus('Preparing PDF export...');
   try {
     if (!window.jspdf?.jsPDF) {
@@ -153,7 +154,7 @@ function exportPdf() {
       window.print();
       return;
     }
-    const unsupported = findUnsupportedChars(resumeData);
+    const unsupported = findUnsupportedChars(exportData);
     const unsupportedNote = unsupported.length ? unsupportedExportNote(unsupported) : '';
     if (unsupportedNote) setImportStatus(unsupportedNote);
 
@@ -168,7 +169,11 @@ function exportPdf() {
     const contentWidth = pageWidth - margin * 2;
     const ink = [29, 36, 33];
     let y = margin;
-    const { basics, summary, experience, education, skills } = resumeData;
+    const basics = exportData.basics && typeof exportData.basics === 'object' ? exportData.basics : {};
+    const summary = exportData.summary;
+    const experience = Array.isArray(exportData.experience) ? exportData.experience : [];
+    const education = Array.isArray(exportData.education) ? exportData.education : [];
+    const skills = exportData.skills;
     const pdfDrawText = (value) => {
       let safe = '';
       for (const character of toPdfText(value)) safe += isWinAnsiChar(character) ? character : '?';
@@ -361,16 +366,19 @@ function unsupportedExportNote(chars) {
   return `Some characters are not supported in the PDF and were replaced: ${shown.join(', ')}${extra}`;
 }
 
-function plainTextFilename() {
-  return `${safeFilename(document.querySelector('#exportFilename').value || resumeData.basics.name || 'CV')}.txt`;
+function plainTextFilename(data) {
+  const source = data && typeof data === 'object' ? data : resumeData;
+  const basics = source.basics && typeof source.basics === 'object' ? source.basics : {};
+  return `${safeFilename(document.querySelector('#exportFilename').value || basics.name || 'CV')}.txt`;
 }
 
-function savePlainTextFile(text) {
+function savePlainTextFile(text, data) {
   const body = text && !String(text).endsWith('\n') ? `${text}\n` : String(text ?? '');
-  downloadFile(new Blob([body], { type: 'text/plain;charset=utf-8' }), plainTextFilename());
+  downloadFile(new Blob([body], { type: 'text/plain;charset=utf-8' }), plainTextFilename(data));
 }
 
-function downloadPlainText() {
-  savePlainTextFile(cvToPlainText(resumeData));
+function downloadPlainText(data) {
+  const exportData = data && typeof data === 'object' ? data : resumeData;
+  savePlainTextFile(cvToPlainText(exportData), exportData);
   setImportStatus('Plain text downloaded.');
 }

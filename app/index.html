@@ -80,6 +80,27 @@
             <label class="paper-size-control" title="Choose your PDF page size"><span>PDF page size</span><select id="paperSize"><option value="letter" selected>Letter</option><option value="a4">A4</option></select></label>
             <label class="paper-size-control" title="Choose PDF text size"><span>Text size</span><select id="textSize"><option value="compact">Compact (9 pt)</option><option value="standard" selected>Standard (10.5 pt)</option><option value="large">Large (12 pt)</option></select></label>
             <label class="filename-control" title="Choose the exported file name"><span>File name</span><input id="exportFilename" type="text" enterkeyhint="done" maxlength="120" spellcheck="false" placeholder="Name CV" /><b>.pdf</b></label>
+            <div class="versions-panel" id="versionsPanel">
+              <div class="versions-select"><label for="versionSelect">Version</label><select id="versionSelect"></select></div>
+              <p class="versions-hint" id="versionEditHint" hidden inert>Edits change your master CV.</p>
+              <div class="versions-actions">
+                <button class="button button-dark" id="newVersionButton" type="button">New version</button>
+                <button class="button button-dark" id="renameVersionButton" type="button" disabled>Rename</button>
+                <button class="button button-dark" id="duplicateVersionButton" type="button" disabled>Duplicate</button>
+                <button class="button button-dark" id="deleteVersionButton" type="button" disabled>Delete</button>
+              </div>
+              <div class="versions-rename" id="versionRename" hidden inert>
+                <label class="field" for="versionRenameInput"><span>Version name</span><input id="versionRenameInput" type="text" maxlength="120" enterkeyhint="done" autocomplete="off" spellcheck="false" /></label>
+                <div class="versions-rename-actions">
+                  <button class="button button-accent" id="versionRenameSave" type="button">Save name</button>
+                  <button class="button button-ghost" id="versionRenameCancel" type="button">Cancel</button>
+                </div>
+              </div>
+              <fieldset class="version-entries" id="versionEntries" hidden inert>
+                <legend>Show in this version</legend>
+                <div class="version-entry-list" id="versionEntryList"></div>
+              </fieldset>
+            </div>
             <button class="button button-dark" id="startNewCvButton" type="button">Start new CV</button>
             <a class="about-link" href="https://ko-fi.com/nativestatetools" rel="noopener noreferrer" target="_blank">Support State CV</a>
           </div>
