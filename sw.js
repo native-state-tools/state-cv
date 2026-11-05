@@ -1,4 +1,4 @@
-const CACHE_NAME = 'state-cv-cache-v34';
+const CACHE_NAME = 'state-cv-cache-v35';
 const CACHE_PREFIX = 'state-cv-cache-';
 const PRECACHE_URLS = [
   './index.html',

@@ -51,6 +51,7 @@ let lastSnapshotAt = Date.now();
 let pendingV1Raw = null;
 let cvVersions = [];
 let activeVersionId = null;
+let pendingEntryRemoval = null;
 let resumeData = loadData();
 migratePendingV1();
 let saveTimer;
@@ -58,7 +59,6 @@ const BACKUP_REMINDER_KEY = 'state-cv-backup-reminder-v1';
 const BACKUP_REMINDER_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 let backupReminder = readBackupReminder();
 let backupReminderDismissed = false;
-let pendingEntryRemoval = null;
 let pendingVersionRemoval = null;
 let undoToastTimer = null;
 const entryExpanded = { experience: [], education: [] };
@@ -221,7 +221,23 @@ function normalizeData(data, { strict = false, makeId = createEntryId } = {}) {
       return normalized;
     });
   };
-  const normalizeVersionList = (value, entryIds) => {
+  const softVersionText = (value, maxLength) => {
+    if (typeof value !== 'string') return '';
+    return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, maxLength);
+  };
+  const versionBulletText = (value) => {
+    if (typeof value !== 'string') return '';
+    const text = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().replace(/^[-*\u2022]\s*/, '').trim();
+    if (!text || text.length > 10000) return '';
+    return text;
+  };
+  const versionSkillText = (value) => {
+    if (typeof value !== 'string') return '';
+    const text = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+    if (!text || text.length > 200) return '';
+    return text;
+  };
+  const normalizeVersionList = (value, entryIds, experienceIds) => {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
       if (strict) reject('versions must be an array.');
@@ -247,7 +263,42 @@ function normalizeData(data, { strict = false, makeId = createEntryId } = {}) {
         seenHidden.add(entryId);
         hiddenEntries.push(entryId);
       });
-      kept.push({ id: item.id, name, hiddenEntries });
+      const hiddenBullets = {};
+      const bulletSource = item.hiddenBullets && typeof item.hiddenBullets === 'object' && !Array.isArray(item.hiddenBullets)
+        ? item.hiddenBullets
+        : {};
+      Object.keys(bulletSource).forEach((entryId) => {
+        if (!experienceIds.has(entryId) || !Array.isArray(bulletSource[entryId])) return;
+        const seenBullets = new Set();
+        const bullets = [];
+        bulletSource[entryId].forEach((bullet) => {
+          const text = versionBulletText(bullet);
+          if (!text || seenBullets.has(text) || bullets.length >= 200) return;
+          seenBullets.add(text);
+          bullets.push(text);
+        });
+        if (bullets.length) hiddenBullets[entryId] = bullets;
+      });
+      const hiddenSkills = [];
+      const seenSkills = new Set();
+      const skillSource = Array.isArray(item.hiddenSkills) ? item.hiddenSkills : [];
+      skillSource.forEach((skill) => {
+        const text = versionSkillText(skill);
+        const key = text.toLowerCase();
+        if (!text || seenSkills.has(key) || hiddenSkills.length >= 200) return;
+        seenSkills.add(key);
+        hiddenSkills.push(text);
+      });
+      kept.push({
+        id: item.id,
+        name,
+        hiddenEntries,
+        hiddenBullets,
+        hiddenSkills,
+        title: softVersionText(item.title, 200),
+        summary: softVersionText(item.summary, 500),
+        exportName: softVersionText(item.exportName, 120)
+      });
     });
     return kept;
   };
@@ -268,8 +319,14 @@ function normalizeData(data, { strict = false, makeId = createEntryId } = {}) {
     'edu_',
     makeId
   );
+  const experienceIds = new Set();
   const entryIds = new Set();
-  experience.forEach((item) => { if (item && typeof item.id === 'string') entryIds.add(item.id); });
+  experience.forEach((item) => {
+    if (item && typeof item.id === 'string') {
+      experienceIds.add(item.id);
+      entryIds.add(item.id);
+    }
+  });
   education.forEach((item) => { if (item && typeof item.id === 'string') entryIds.add(item.id); });
   return {
     master: {
@@ -287,30 +344,93 @@ function normalizeData(data, { strict = false, makeId = createEntryId } = {}) {
       education,
       skills: normalizeText(source.skills, 'skills', 2000)
     },
-    versions: isCurrentSchema ? normalizeVersionList(data.versions, entryIds) : []
+    versions: isCurrentSchema ? normalizeVersionList(data.versions, entryIds, experienceIds) : []
   };
 }
 
 function toStorable() {
   const versions = typeof cvVersions !== 'undefined' && Array.isArray(cvVersions) ? cvVersions : [];
+  const experienceById = new Map();
   const entryIds = new Set();
+  const addRecord = (listName, item) => {
+    if (!item || typeof item.id !== 'string') return;
+    entryIds.add(item.id);
+    if (listName === 'experience') experienceById.set(item.id, item);
+  };
   if (typeof resumeData !== 'undefined' && resumeData && typeof resumeData === 'object') {
     ['experience', 'education'].forEach((listName) => {
       const list = resumeData[listName];
       if (!Array.isArray(list)) return;
-      list.forEach((item) => {
-        if (item && typeof item.id === 'string') entryIds.add(item.id);
-      });
+      list.forEach((item) => addRecord(listName, item));
     });
   }
+  const pending = typeof pendingEntryRemoval !== 'undefined' ? pendingEntryRemoval : null;
+  if (pending && pending.item) addRecord(pending.list, pending.item);
+  const canMatchBullets = typeof splitBullets === 'function' && typeof normalizeBulletText === 'function';
+  const canMatchSkills = typeof skillParts === 'function' && typeof skillKey === 'function';
+  const liveSkillKeys = new Set();
+  if (canMatchSkills && typeof resumeData !== 'undefined' && resumeData) {
+    skillParts(resumeData.skills).forEach((skill) => {
+      const key = skillKey(skill);
+      if (key) liveSkillKeys.add(key);
+    });
+  }
+  const cleanText = (value, maxLength) => (
+    typeof value === 'string'
+      ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, maxLength)
+      : ''
+  );
   return {
     schemaVersion: SCHEMA_VERSION,
     master: resumeData,
-    versions: versions.filter((version) => version && typeof version === 'object').map((version) => ({
-      id: version.id,
-      name: version.name,
-      hiddenEntries: (Array.isArray(version.hiddenEntries) ? version.hiddenEntries : []).filter((id) => entryIds.has(id))
-    }))
+    versions: versions.filter((version) => version && typeof version === 'object').map((version) => {
+      const hiddenEntries = (Array.isArray(version.hiddenEntries) ? version.hiddenEntries : [])
+        .filter((id) => typeof id === 'string' && entryIds.has(id));
+      const hiddenBullets = {};
+      const sourceBullets = version.hiddenBullets && typeof version.hiddenBullets === 'object' && !Array.isArray(version.hiddenBullets)
+        ? version.hiddenBullets
+        : {};
+      Object.keys(sourceBullets).forEach((id) => {
+        if (!experienceById.has(id) || !Array.isArray(sourceBullets[id])) return;
+        const live = new Set();
+        if (canMatchBullets) splitBullets(experienceById.get(id).highlights).forEach((text) => live.add(text));
+        const kept = [];
+        const seen = new Set();
+        sourceBullets[id].forEach((item) => {
+          if (typeof item !== 'string') return;
+          const text = canMatchBullets ? normalizeBulletText(item) : item;
+          if (!text || text.length > 10000 || seen.has(text)) return;
+          if (canMatchBullets && !live.has(text)) return;
+          if (kept.length >= 200) return;
+          seen.add(text);
+          kept.push(text);
+        });
+        if (kept.length) hiddenBullets[id] = kept;
+      });
+      const hiddenSkills = [];
+      const seenSkills = new Set();
+      (Array.isArray(version.hiddenSkills) ? version.hiddenSkills : []).forEach((item) => {
+        if (typeof item !== 'string') return;
+        const text = item.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+        if (!text || text.length > 200) return;
+        const key = text.toLowerCase();
+        if (seenSkills.has(key)) return;
+        if (canMatchSkills && !liveSkillKeys.has(key)) return;
+        if (hiddenSkills.length >= 200) return;
+        seenSkills.add(key);
+        hiddenSkills.push(text);
+      });
+      return {
+        id: version.id,
+        name: version.name,
+        hiddenEntries,
+        hiddenBullets,
+        hiddenSkills,
+        title: cleanText(version.title, 200),
+        summary: cleanText(version.summary, 500),
+        exportName: cleanText(version.exportName, 120)
+      };
+    })
   };
 }
 
@@ -1163,7 +1283,16 @@ function createVersion(name, makeId) {
   const trimmed = typeof name === 'string' ? name.trim() : '';
   const versionName = (trimmed || 'Untitled version').slice(0, 120);
   const id = String(typeof makeId === 'function' ? makeId('ver_') : '');
-  return { id, name: versionName, hiddenEntries: [] };
+  return {
+    id,
+    name: versionName,
+    hiddenEntries: [],
+    hiddenBullets: {},
+    hiddenSkills: [],
+    title: '',
+    summary: '',
+    exportName: ''
+  };
 }
 
 function duplicateVersion(version, existingNames, makeId) {
@@ -1184,7 +1313,104 @@ function duplicateVersion(version, existingNames, makeId) {
     ? source.hiddenEntries.filter((entryId) => typeof entryId === 'string')
     : [];
   const id = String(typeof makeId === 'function' ? makeId('ver_') : '');
-  return { id, name: candidate.slice(0, 120), hiddenEntries: hiddenEntries.slice() };
+  const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
+  return {
+    id,
+    name: candidate.slice(0, 120),
+    hiddenEntries: hiddenEntries.slice(),
+    hiddenBullets: copyHiddenBullets(source.hiddenBullets),
+    hiddenSkills: copyStringList(source.hiddenSkills).slice(0, 200),
+    title: text(source.title, 200),
+    summary: text(source.summary, 500),
+    exportName: text(source.exportName, 120)
+  };
+}
+
+function copyStringList(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
+}
+
+function copyHiddenBullets(value) {
+  const copy = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return copy;
+  Object.keys(value).forEach((key) => {
+    const list = copyStringList(value[key]);
+    if (list.length) copy[key] = list.slice();
+  });
+  return copy;
+}
+
+function normalizeBulletText(value) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+    .trim()
+    .replace(/^[-*\u2022]\s*/, '')
+    .trim();
+}
+
+function splitBullets(highlights) {
+  return String(highlights ?? '').split(/\r\n|\r|\n/).map(normalizeBulletText).filter(Boolean);
+}
+
+function skillKey(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function skillParts(skills) {
+  return String(skills ?? '').split(/[,|;\t]|[\u2022\u00b7\u25aa]/).map((part) => (
+    part.replace(/^[\u2022\u25cf\u25aa\u25e6\u00b7\u2013\u2014*-]\s*/, '').replace(/\s+/g, ' ').trim()
+  )).filter(Boolean);
+}
+
+function splitSkillList(skills) {
+  const seen = new Set();
+  const result = [];
+  skillParts(skills).forEach((skill) => {
+    const key = skillKey(skill);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(skill);
+  });
+  return result;
+}
+
+function skillsJoiner(skills) {
+  const text = String(skills ?? '');
+  if (text.includes(',')) return ', ';
+  if (text.includes('|')) return ' | ';
+  if (text.includes(';')) return '; ';
+  if (text.includes('\t')) return '\t';
+  return ', ';
+}
+
+function filterHighlights(highlights, hiddenList) {
+  const hidden = new Set((Array.isArray(hiddenList) ? hiddenList : []).map(normalizeBulletText).filter(Boolean));
+  if (!hidden.size) return highlights;
+  const lines = String(highlights ?? '').split(/\r\n|\r|\n/);
+  let removed = false;
+  const kept = [];
+  lines.forEach((line) => {
+    const text = normalizeBulletText(line);
+    if (text && hidden.has(text)) {
+      removed = true;
+      return;
+    }
+    kept.push(line);
+  });
+  if (!removed) return highlights;
+  while (kept.length && !normalizeBulletText(kept[0])) kept.shift();
+  while (kept.length && !normalizeBulletText(kept[kept.length - 1])) kept.pop();
+  return kept.join('\n');
+}
+
+function filterSkills(skills, hiddenSkills) {
+  const hidden = new Set((Array.isArray(hiddenSkills) ? hiddenSkills : []).map(skillKey).filter(Boolean));
+  if (!hidden.size) return skills;
+  const original = typeof skills === 'string' ? skills : '';
+  const parts = skillParts(original);
+  const kept = parts.filter((skill) => !hidden.has(skillKey(skill)));
+  if (kept.length === parts.length) return skills;
+  return kept.join(skillsJoiner(original));
 }
 
 function applyVersion(master, version) {
@@ -1200,9 +1426,25 @@ function applyVersion(master, version) {
   next.education = copyList(source.education);
   if (!version) return next;
   const hidden = new Set(Array.isArray(version.hiddenEntries) ? version.hiddenEntries : []);
-  const visible = (list) => list.filter((item) => !(item && typeof item === 'object' && hidden.has(item.id)));
-  next.experience = visible(next.experience);
-  next.education = visible(next.education);
+  const bulletMap = version.hiddenBullets && typeof version.hiddenBullets === 'object' && !Array.isArray(version.hiddenBullets)
+    ? version.hiddenBullets
+    : {};
+  next.experience = next.experience.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const highlights = filterHighlights(item.highlights, bulletMap[item.id]);
+    if (highlights === item.highlights) return item;
+    return { ...item, highlights };
+  }).filter((item) => !(item && typeof item === 'object' && hidden.has(item.id)));
+  next.education = next.education.filter((item) => !(item && typeof item === 'object' && hidden.has(item.id)));
+  const title = typeof version.title === 'string' ? version.title : '';
+  if (title.trim()) {
+    const basics = next.basics && typeof next.basics === 'object' && !Array.isArray(next.basics) ? next.basics : {};
+    next.basics = { ...basics, title };
+  }
+  const summary = typeof version.summary === 'string' ? version.summary : '';
+  if (summary.trim()) next.summary = summary;
+  const skills = filterSkills(next.skills, version.hiddenSkills);
+  if (skills !== next.skills) next.skills = skills;
   return next;
 }
 
@@ -1357,6 +1599,7 @@ function renderRepeater(listId, templateId, items, createBlankRecord) {
           const versionText = versionBox && versionBox.parentElement ? versionBox.parentElement.querySelector('span') : null;
           if (versionText) versionText.textContent = entryCardTitle(entryType, item);
         }
+        if (field.dataset.key === 'highlights') renderVersionEntries();
         updatePreview();
         updateCompletion();
         scheduleSave();
@@ -1429,9 +1672,23 @@ function closeVersionRename(returnFocus) {
   }
 }
 
+function hiddenBulletSet(version, entryId) {
+  const source = version && version.hiddenBullets && typeof version.hiddenBullets === 'object' ? version.hiddenBullets[entryId] : [];
+  const hidden = new Set();
+  (Array.isArray(source) ? source : []).forEach((item) => {
+    const text = normalizeBulletText(item);
+    if (text) hidden.add(text);
+  });
+  return hidden;
+}
+
 function renderVersionEntries() {
   const list = document.querySelector('#versionEntryList');
   if (!list) return;
+  const openBullets = new Set();
+  list.querySelectorAll('details[data-entry-id][open]').forEach((node) => {
+    if (node.dataset.entryId) openBullets.add(node.dataset.entryId);
+  });
   list.replaceChildren();
   const version = activeVersion();
   if (!version) return;
@@ -1439,6 +1696,8 @@ function renderVersionEntries() {
   const addEntries = (type, items) => {
     (Array.isArray(items) ? items : []).forEach((item) => {
       if (!item || typeof item.id !== 'string') return;
+      const block = document.createElement('div');
+      block.className = 'version-entry-block';
       const label = document.createElement('label');
       label.className = 'version-entry';
       const input = document.createElement('input');
@@ -1455,13 +1714,115 @@ function renderVersionEntries() {
         active.hiddenEntries = nextHidden;
         updatePreview();
         scheduleSave();
+        if (type === 'experience') {
+          renderVersionEntries();
+          const next = document.querySelector(`#versionEntryList [data-entry-id="${item.id}"]`);
+          if (next) next.focus();
+        }
       });
       label.append(input, text);
-      list.append(label);
+      block.append(label);
+      if (type === 'experience' && input.checked) {
+        const bullets = splitBullets(item.highlights);
+        if (bullets.length) {
+          const details = document.createElement('details');
+          details.className = 'version-bullets';
+          details.dataset.entryId = item.id;
+          if (openBullets.has(item.id)) details.open = true;
+          const summary = document.createElement('summary');
+          summary.textContent = 'Bullets';
+          const bulletList = document.createElement('div');
+          bulletList.className = 'version-choice-list';
+          const hiddenBullets = hiddenBulletSet(version, item.id);
+          bullets.forEach((bullet) => {
+            const bulletLabel = document.createElement('label');
+            bulletLabel.className = 'version-entry version-bullet';
+            const bulletInput = document.createElement('input');
+            bulletInput.type = 'checkbox';
+            bulletInput.checked = !hiddenBullets.has(bullet);
+            bulletInput.dataset.bullet = bullet;
+            bulletInput.addEventListener('change', () => {
+              const active = activeVersion();
+              if (!active) return;
+              if (!active.hiddenBullets || typeof active.hiddenBullets !== 'object' || Array.isArray(active.hiddenBullets)) {
+                active.hiddenBullets = {};
+              }
+              const current = Array.isArray(active.hiddenBullets[item.id]) ? active.hiddenBullets[item.id] : [];
+              const next = current.filter((entry) => normalizeBulletText(entry) !== bullet);
+              if (!bulletInput.checked) next.push(bullet);
+              if (next.length) active.hiddenBullets[item.id] = next;
+              else delete active.hiddenBullets[item.id];
+              bulletList.querySelectorAll('input[type="checkbox"]').forEach((box) => {
+                if (box.dataset.bullet === bullet) box.checked = bulletInput.checked;
+              });
+              updatePreview();
+              scheduleSave();
+            });
+            const bulletText = document.createElement('span');
+            bulletText.textContent = bullet;
+            bulletLabel.append(bulletInput, bulletText);
+            bulletList.append(bulletLabel);
+          });
+          details.append(summary, bulletList);
+          block.append(details);
+        }
+      }
+      list.append(block);
     });
   };
   addEntries('experience', resumeData.experience);
   addEntries('education', resumeData.education);
+}
+
+function renderVersionSkills() {
+  const list = document.querySelector('#versionSkillList');
+  if (!list) return;
+  list.replaceChildren();
+  const version = activeVersion();
+  if (!version) return;
+  const hidden = new Set((Array.isArray(version.hiddenSkills) ? version.hiddenSkills : []).map(skillKey).filter(Boolean));
+  const skills = splitSkillList(resumeData.skills);
+  if (!skills.length) {
+    const empty = document.createElement('p');
+    empty.className = 'versions-hint';
+    empty.textContent = 'No skills in the master CV.';
+    list.append(empty);
+    return;
+  }
+  skills.forEach((skill) => {
+    const label = document.createElement('label');
+    label.className = 'version-entry';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !hidden.has(skillKey(skill));
+    input.addEventListener('change', () => {
+      const active = activeVersion();
+      if (!active) return;
+      const key = skillKey(skill);
+      const next = (Array.isArray(active.hiddenSkills) ? active.hiddenSkills : []).filter((item) => skillKey(item) !== key);
+      if (!input.checked) next.push(skill);
+      active.hiddenSkills = next;
+      updatePreview();
+      scheduleSave();
+    });
+    const text = document.createElement('span');
+    text.textContent = skill;
+    label.append(input, text);
+    list.append(label);
+  });
+}
+
+function syncVersionCopyFields() {
+  const version = activeVersion();
+  const title = document.querySelector('#versionTitle');
+  const summary = document.querySelector('#versionSummary');
+  const count = document.querySelector('#versionSummaryCount');
+  const titleValue = version && typeof version.title === 'string' ? version.title : '';
+  const summaryValue = version && typeof version.summary === 'string' ? version.summary : '';
+  if (title && document.activeElement !== title) title.value = titleValue;
+  if (summary && document.activeElement !== summary) summary.value = summaryValue;
+  const summaryLength = summary && document.activeElement === summary ? summary.value.length : summaryValue.length;
+  if (count) count.textContent = `${summaryLength} / 500`;
 }
 
 function renderVersionControls() {
@@ -1500,14 +1861,34 @@ function renderVersionControls() {
   }
   if (!managing) closeVersionRename(false);
   renderVersionEntries();
+  renderVersionSkills();
+  syncVersionCopyFields();
+  showExportFilename();
+}
+
+function masterExportBase() {
+  const person = resumeData.basics && typeof resumeData.basics.name === 'string' ? resumeData.basics.name.trim() : '';
+  return person ? `${person} CV` : 'Untitled CV';
 }
 
 function defaultExportFilename() {
-  const person = resumeData.basics.name.trim();
-  const base = person ? `${person} CV` : 'Untitled CV';
   const version = activeVersion();
-  if (version) return `${base} - ${version.name}`;
-  return resumeData.exportName || base;
+  if (!version) {
+    const custom = typeof resumeData.exportName === 'string' ? resumeData.exportName.trim() : '';
+    return custom ? resumeData.exportName : masterExportBase();
+  }
+  const custom = typeof version.exportName === 'string' ? version.exportName.trim() : '';
+  return custom ? version.exportName : `${masterExportBase()} - ${version.name}`;
+}
+
+function showExportFilename() {
+  const filename = document.querySelector('#exportFilename');
+  if (!filename) return;
+  const version = activeVersion();
+  if (version) filename.removeAttribute('data-edited');
+  else if (typeof resumeData.exportName === 'string' && resumeData.exportName.trim()) filename.dataset.edited = 'true';
+  else filename.removeAttribute('data-edited');
+  filename.value = defaultExportFilename();
 }
 
 function createNewVersion() {
@@ -1615,7 +1996,14 @@ function updateWorkspaceName() {
   const name = resumeData.basics.name.trim();
   document.querySelector('#workspaceName').textContent = name ? `${name} CV` : 'Untitled CV';
   const filename = document.querySelector('#exportFilename');
-  if (filename && !filename.dataset.edited) filename.value = defaultExportFilename();
+  if (!filename || document.activeElement === filename) return;
+  const version = activeVersion();
+  if (version) {
+    if (typeof version.exportName === 'string' && version.exportName.trim()) return;
+    filename.value = defaultExportFilename();
+    return;
+  }
+  if (!filename.dataset.edited) filename.value = defaultExportFilename();
 }
 
 function updatePreview({ force = false } = {}) {
@@ -1838,7 +2226,13 @@ function confirmReplacingSavedCv() {
     return window.confirm(unreadableMessage);
   }
   try {
-    if (isBlankCv(normalizeData(parsed, { strict: true }).master)) return true;
+    const normalized = normalizeData(parsed, { strict: true });
+    const versionCount = Array.isArray(normalized.versions) ? normalized.versions.length : 0;
+    if (isBlankCv(normalized.master) && versionCount === 0) return true;
+    if (versionCount > 0) {
+      const versionLabel = versionCount === 1 ? '1 version' : `${versionCount} versions`;
+      return window.confirm(`Importing will replace your current CV. Your ${versionLabel} will be removed. A copy is kept in Your data > Recent snapshots. Continue?`);
+    }
   } catch (error) {
     return window.confirm(unreadableMessage);
   }
@@ -1877,7 +2271,7 @@ function startNewCv({ confirmReplacement = true } = {}) {
   if (saved) closeLaunchScreen();
 }
 
-document.querySelectorAll('[data-path]').forEach((field) => field.addEventListener('input', () => { setValue(field.dataset.path, field.value); if (field.dataset.path === 'summary') updateSummaryCount(); updatePreview(); updateCompletion(); scheduleSave(); }));
+document.querySelectorAll('[data-path]').forEach((field) => field.addEventListener('input', () => { setValue(field.dataset.path, field.value); if (field.dataset.path === 'summary') updateSummaryCount(); if (field.dataset.path === 'skills') renderVersionSkills(); updatePreview(); updateCompletion(); scheduleSave(); }));
 document.querySelector('#addExperience').addEventListener('click', () => addEntry('experience'));
 document.querySelector('#addEducation').addEventListener('click', () => addEntry('education'));
 
@@ -2047,7 +2441,39 @@ document.querySelector('#pdfInput').addEventListener('change', async (event) => 
   await handlePdfImport(file);
   event.target.value = '';
 });
-document.querySelector('#exportFilename').addEventListener('input', (event) => { event.target.dataset.edited = 'true'; resumeData.exportName = event.target.value; scheduleSave(); });
+document.querySelector('#exportFilename').addEventListener('input', (event) => {
+  const version = activeVersion();
+  if (version) {
+    version.exportName = event.target.value.trim() ? event.target.value : '';
+    event.target.removeAttribute('data-edited');
+  } else {
+    event.target.dataset.edited = 'true';
+    resumeData.exportName = event.target.value;
+  }
+  scheduleSave();
+});
+document.querySelector('#exportFilename').addEventListener('blur', (event) => {
+  const version = activeVersion();
+  if (!version) return;
+  if (typeof version.exportName === 'string' && version.exportName.trim()) return;
+  event.target.value = defaultExportFilename();
+});
+document.querySelector('#versionTitle').addEventListener('input', (event) => {
+  const version = activeVersion();
+  if (!version) return;
+  version.title = event.target.value.slice(0, 200);
+  updatePreview();
+  scheduleSave();
+});
+document.querySelector('#versionSummary').addEventListener('input', (event) => {
+  const version = activeVersion();
+  if (!version) return;
+  version.summary = event.target.value.slice(0, 500);
+  const count = document.querySelector('#versionSummaryCount');
+  if (count) count.textContent = `${version.summary.length} / 500`;
+  updatePreview();
+  scheduleSave();
+});
 document.querySelector('#exportButton').addEventListener('click', downloadBackup);
 document.querySelector('#copyPlainTextButton').addEventListener('click', copyPlainText);
 document.querySelector('#downloadPlainTextButton').addEventListener('click', () => downloadPlainText(currentExportData()));

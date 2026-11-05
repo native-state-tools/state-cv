@@ -62,7 +62,7 @@ async function enterEditor(page) {
   await expect(launchScreen).toHaveClass(/is-hidden/);
   await expect.poll(() => launchScreen.evaluate((screen) => {
     const style = getComputedStyle(screen);
-    const more = document.querySelector('.more-menu summary');
+    const more = document.querySelector('.more-menu > summary');
     const box = more.getBoundingClientRect();
     const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
     const coversMore = Boolean(hit && (hit === screen || screen.contains(hit)));
@@ -107,7 +107,7 @@ async function openSection(page, name) {
 }
 
 async function openDataDialog(page) {
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   await page.getByRole('button', { name: 'Your data' }).click();
   await expect(page.getByRole('dialog', { name: 'Your data' })).toBeVisible();
 }
@@ -285,7 +285,7 @@ test('only one editor section is visible and hidden sections are inert', async (
   await expectOnly('contact');
 
   page.once('dialog', (dialog) => dialog.accept());
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   await page.getByRole('button', { name: 'Start new CV', exact: true }).click();
   await expect(page.getByLabel('Full name')).toHaveValue('');
   await expectOnly('contact');
@@ -446,7 +446,7 @@ test('starting a new CV and restoring a snapshot keeps the pre-restore CV undoab
   await page.getByLabel('Full name').fill('Snapshot CV');
   await expect.poll(() => savedName(page)).toBe('Snapshot CV');
 
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Start new CV', exact: true }).click();
   await expect(page.getByLabel('Full name')).toHaveValue('');
@@ -558,7 +558,7 @@ test('importing a v1 JSON backup saves and downloads schemaVersion 2', async ({ 
   expect(saved.master.experience[0].id).toMatch(/^exp_/);
 
   const downloadPromise = page.waitForEvent('download');
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   await page.getByRole('button', { name: 'Backup (JSON)' }).click();
   const download = await downloadPromise;
   const backup = JSON.parse(await fs.readFile(await download.path(), 'utf8'));
@@ -745,7 +745,7 @@ test('active view exposes one h1 and More opens and closes by keyboard', async (
   expect(await visibleLevelOneHeadings(page)).toBe(1);
   await enterEditor(page);
   expect(await visibleLevelOneHeadings(page)).toBe(1);
-  const more = page.locator('.more-menu summary');
+  const more = page.locator('.more-menu > summary');
   await expect(page.locator('#moreMenuContent')).toBeHidden();
   await more.focus();
   await page.keyboard.press('Space');
@@ -761,7 +761,7 @@ test('active view exposes one h1 and More opens and closes by keyboard', async (
 test('Your data dialog traps focus, closes with Escape, and restores its opener', async ({ page }) => {
   await openApp(page);
   await enterEditor(page);
-  const more = page.locator('.more-menu summary');
+  const more = page.locator('.more-menu > summary');
   await more.click();
   const opener = page.getByRole('button', { name: 'Your data' });
   await opener.click();
@@ -975,7 +975,7 @@ test('PDF export of a filled CV keeps reading order and omits placeholders', asy
 
 test('plain text download contains the CV in reading order', async ({ page }) => {
   await openStoredCv(page, filledCv);
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   await expect(page.locator('#textSize')).toHaveValue('standard');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download .txt' }).click();
@@ -1016,13 +1016,13 @@ test('Text size Large increases the preview bullet size', async ({ page, isMobil
   const bullet = preview.locator('.entry-bullets li').first();
   const standardSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   await page.locator('#textSize').selectOption('compact');
   await expect(preview).toHaveClass(/preview-text-compact/);
   if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const compactSummary = await summary.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   await page.locator('#textSize').selectOption('large');
   await expect(preview).toHaveClass(/preview-text-large/);
   await expect(preview).not.toHaveClass(/preview-text-standard/);
@@ -1041,7 +1041,7 @@ test('Copy as plain text shows a local status', async ({ page, context }) => {
     permissionsGranted = false;
   }
   await openStoredCv(page, filledCv);
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   await page.getByRole('button', { name: 'Copy as plain text' }).click();
   await expect(page.locator('#saveStatus')).toContainText(
     permissionsGranted ? 'Plain text copied' : /Plain text copied|Clipboard blocked\. Plain text downloaded/
@@ -1102,7 +1102,7 @@ test('ATS tips drop the missing email after the fields are filled and the count 
   await page.getByLabel('Email').fill('alex@example.com');
   await page.getByLabel('Phone').fill('(555) 123-4567');
   await openSection(page, 'Summary');
-  await page.getByLabel(/^Summary/).fill('Builds clear tools for operations teams.');
+  await page.getByRole('textbox', { name: /^Summary \d/ }).fill('Builds clear tools for operations teams.');
   await openSection(page, 'Skills');
   await page.getByLabel(/^Skills/).fill('Figma, research');
   await expect(page.locator('#atsTipsList')).toHaveText('No ATS issues found.');
@@ -1595,7 +1595,7 @@ test('Import confirm is skipped when the saved CV is blank', async ({ page }) =>
     await expect(page.getByLabel('Full name')).toHaveValue('Recovered CV');
   });
 
-  await page.locator('.more-menu summary').click();
+  await page.locator('.more-menu > summary').click();
   let startNewMessage = '';
   page.once('dialog', (dialog) => {
     startNewMessage = dialog.message();
@@ -1801,12 +1801,12 @@ async function openVersions(page) {
   const edit = page.getByRole('button', { name: 'Edit', exact: true });
   if (await edit.isVisible() && await edit.getAttribute('aria-pressed') !== 'true') await edit.click();
   const menu = page.locator('.more-menu');
-  if (!(await menu.evaluate((element) => element.open))) await page.locator('.more-menu summary').click();
+  if (!(await menu.evaluate((element) => element.open))) await page.locator('.more-menu > summary').click();
   await expect(page.getByLabel('Version', { exact: true })).toBeVisible();
 }
 
 async function expectVersionPreview(page, { present, absent } = {}) {
-  const previewButton = page.getByRole('button', { name: 'Preview', exact: true });
+  const previewButton = page.locator('[data-mobile-view-button="preview"]');
   if (await previewButton.isVisible()) await previewButton.click();
   const preview = page.locator('#resumePreview');
   await expect(preview).toBeVisible();
@@ -1892,4 +1892,164 @@ test('versions hide one experience entry in preview and plain text, then survive
     return data.master.experience.map((item) => item.role);
   });
   expect(roles).toEqual(['Visible Role', 'Hidden Role']);
+});
+
+test('versions hide one bullet and one skill, override title and summary, and keep a filename per version', async ({ page }) => {
+  test.setTimeout(60000);
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Alex Morgan');
+  await page.getByLabel('Professional title').fill('Master Title');
+  await openSection(page, 'Summary');
+  await page.getByRole('textbox', { name: /^Summary \d/ }).fill('Master summary text');
+  await openSection(page, 'Experience');
+  await page.getByLabel('Job title').fill('Visible Role');
+  await page.getByLabel('Company').fill('Visible Co');
+  await page.getByLabel(/^Highlights/).fill('VisibleBulletLine\nHiddenBulletLine');
+  await openSection(page, 'Skills');
+  await page.getByLabel(/^Skills/).fill('KeptSkill, ZebraSkill');
+  await expect(page.locator('#saveStatus')).toContainText('Saved locally');
+
+  await openVersions(page);
+  await page.getByRole('button', { name: 'New version', exact: true }).click();
+  await expect(page.locator('#exportFilename')).toHaveValue('Alex Morgan CV - Untitled version');
+  const block = page.locator('.version-entry-block', { has: page.getByRole('checkbox', { name: 'Visible Role, Visible Co' }) });
+  await block.locator('summary').click();
+  await block.getByRole('checkbox', { name: 'HiddenBulletLine', exact: true }).uncheck();
+  await page.locator('#versionSkills summary').click();
+  await page.getByRole('checkbox', { name: 'ZebraSkill', exact: true }).uncheck();
+  await page.locator('#versionCopy summary').click();
+  await page.getByLabel('Title for this version').fill('Version Title');
+  await page.getByLabel('Summary for this version').fill('Version summary text');
+  await expect(page.locator('#versionSummaryCount')).toHaveText('20 / 500');
+
+  await expectVersionPreview(page, { present: 'Version Title', absent: 'HiddenBulletLine' });
+  const preview = page.locator('#resumePreview');
+  await expect(preview).toContainText('Version summary text');
+  await expect(preview).toContainText('VisibleBulletLine');
+  await expect(preview).toContainText('KeptSkill');
+  await expect(preview).not.toContainText('ZebraSkill');
+  await expect(preview).not.toContainText('Master Title');
+  await expect(preview).not.toContainText('Master summary text');
+
+  await openVersions(page);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download .txt' }).click();
+  const download = await downloadPromise;
+  const content = await fs.readFile(await download.path(), 'utf8');
+  expect(content).toContain('Version Title');
+  expect(content).toContain('Version summary text');
+  expect(content).toContain('VisibleBulletLine');
+  expect(content).not.toContain('HiddenBulletLine');
+  expect(content).not.toContain('ZebraSkill');
+  expect(content).toContain('KeptSkill');
+
+  await openVersions(page);
+  await page.locator('#exportFilename').fill('Acme file');
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
+    const version = data.versions && data.versions[0];
+    return version && version.exportName === 'Acme file' && data.master.exportName === '';
+  })).toBe(true);
+  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Master CV' });
+  await expect(page.locator('#exportFilename')).toHaveValue('Alex Morgan CV');
+  await expectVersionPreview(page, { present: 'HiddenBulletLine' });
+  await expect(page.locator('#resumePreview')).toContainText('Master Title');
+  await expect(page.locator('#resumePreview')).toContainText('ZebraSkill');
+  await expect(page.locator('#resumePreview')).toContainText('Master summary text');
+  await expect(page.locator('#resumePreview')).not.toContainText('Version Title');
+
+  await openVersions(page);
+  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Untitled version' });
+  await expect(page.locator('#exportFilename')).toHaveValue('Acme file');
+  await page.locator('#versionCopy summary').click();
+  await expect(page.getByLabel('Title for this version')).toHaveValue('Version Title');
+
+  await page.reload();
+  await enterEditor(page);
+  await openVersions(page);
+  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Untitled version' });
+  await expect(page.locator('#exportFilename')).toHaveValue('Acme file');
+  await page.locator('#versionCopy summary').click();
+  await expect(page.getByLabel('Title for this version')).toHaveValue('Version Title');
+  await expect(page.getByLabel('Summary for this version')).toHaveValue('Version summary text');
+  const blockAgain = page.locator('.version-entry-block', { has: page.getByRole('checkbox', { name: 'Visible Role, Visible Co' }) });
+  await blockAgain.locator('summary').click();
+  await expect(blockAgain.getByRole('checkbox', { name: 'HiddenBulletLine', exact: true })).not.toBeChecked();
+  await page.locator('#versionSkills summary').click();
+  await expect(page.getByRole('checkbox', { name: 'ZebraSkill', exact: true })).not.toBeChecked();
+  await expectVersionPreview(page, { present: 'Version Title', absent: 'ZebraSkill' });
+});
+
+test('versions keep a deleted entry and its hidden bullet until undo', async ({ page }) => {
+  test.setTimeout(60000);
+  await openApp(page);
+  await enterEditor(page);
+  await openSection(page, 'Experience');
+  await page.getByLabel('Job title').fill('Kept Role');
+  await page.getByLabel('Company').fill('Kept Co');
+  await page.getByLabel(/^Highlights/).fill('KeptBullet\nSecretBullet');
+  await page.getByRole('button', { name: 'Add experience' }).click();
+  await page.getByLabel('Job title').nth(1).fill('Hidden Role');
+  await page.getByLabel('Company').nth(1).fill('Hidden Co');
+  await expect(page.locator('#saveStatus')).toContainText('Saved locally');
+
+  await openVersions(page);
+  await page.getByRole('button', { name: 'New version', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' }).uncheck();
+  const kept = page.locator('.version-entry-block', { has: page.getByRole('checkbox', { name: 'Kept Role, Kept Co' }) });
+  await kept.locator('summary').click();
+  await kept.getByRole('checkbox', { name: 'SecretBullet', exact: true }).uncheck();
+  await page.keyboard.press('Escape');
+
+  await openSection(page, 'Experience');
+  await page.getByRole('button', { name: 'Remove experience entry 2' }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
+    const version = data.versions && data.versions[0];
+    const ids = (data.master.experience || []).map((item) => item.id);
+    return Boolean(version && version.hiddenEntries.some((id) => !ids.includes(id)) && ids.length === 1);
+  })).toBe(true);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await openVersions(page);
+  await expect(page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' })).not.toBeChecked();
+  await page.keyboard.press('Escape');
+
+  await openSection(page, 'Experience');
+  await page.getByRole('button', { name: 'Remove experience entry 1' }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
+    const version = data.versions && data.versions[0];
+    const ids = (data.master.experience || []).map((item) => item.id);
+    const hidden = version && version.hiddenBullets;
+    const keptId = Object.keys(hidden || {}).find((id) => !ids.includes(id));
+    return Boolean(keptId && hidden[keptId].includes('SecretBullet'));
+  })).toBe(true);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await openVersions(page);
+  const keptAgain = page.locator('.version-entry-block', { has: page.getByRole('checkbox', { name: 'Kept Role, Kept Co' }) });
+  await keptAgain.locator('summary').click();
+  await expect(keptAgain.getByRole('checkbox', { name: 'SecretBullet', exact: true })).not.toBeChecked();
+});
+
+test('versions are named when PDF import replaces the CV', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Alex Morgan');
+  await expect.poll(() => savedName(page)).toBe('Alex Morgan');
+  await openVersions(page);
+  await page.getByRole('button', { name: 'New version', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
+    return Array.isArray(data.versions) && data.versions.length === 1;
+  })).toBe(true);
+  let message = '';
+  page.once('dialog', (dialog) => {
+    message = dialog.message();
+    dialog.dismiss();
+  });
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
+  await expect.poll(() => message).toContain('Your 1 version will be removed.');
+  expect(message).toContain('A copy is kept in Your data > Recent snapshots.');
+  await expect(page.getByLabel('Full name')).toHaveValue('Alex Morgan');
 });

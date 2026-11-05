@@ -129,9 +129,18 @@ button { cursor: pointer; }
 .version-entries { border: 1px solid var(--control-border); border-radius: 7px; margin: 0; min-width: 0; padding: 8px; }
 .version-entries legend { color: var(--muted); font-size: 12px; padding: 0 4px; }
 .version-entry-list { display: grid; gap: 4px; max-height: 220px; overflow: auto; }
+.version-entry-block { min-width: 0; }
 .version-entry { align-items: center; color: var(--ink); display: flex; font-size: 16px; gap: 8px; line-height: 1.3; min-height: 44px; }
 .version-entry input { flex: 0 0 auto; width: auto; }
 .version-entry span { min-width: 0; overflow-wrap: anywhere; }
+.version-choice-list { display: grid; gap: 4px; min-width: 0; }
+.version-bullets { margin: 0 0 4px 16px; min-width: 0; }
+.version-bullets > summary, .version-group > summary { color: var(--ink); cursor: pointer; font-size: 14px; min-height: 44px; padding: 8px 4px; }
+.version-bullets > summary { color: var(--muted); font-size: 13px; }
+.version-group { border-top: 1px solid var(--line); margin-top: 8px; min-width: 0; padding-top: 4px; }
+.version-group > summary { font-weight: 700; }
+.version-group .field { margin-top: 8px; }
+.version-group .versions-hint { margin-top: 4px; }
 .workspace { display: grid; grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr); min-height: calc(100vh - 65px); }
 .app-shell[data-preview-hidden="true"] .workspace { grid-template-columns: minmax(0, 1fr); }
 .app-shell[data-preview-hidden="true"] .preview-panel { display: none; }
@@ -398,7 +407,7 @@ html.page-letter { page: letter; }
 }
 @media (pointer: coarse) {
   button, select, input, textarea { min-height: 44px; }
-  .button, .paper-size-control, .filename-control, .versions-select, .version-entry, .icon-button, .remove-item, .entry-toggle, .mobile-view-nav button, .about-link { min-height: 44px; }
+  .button, .paper-size-control, .filename-control, .versions-select, .version-entry, .version-bullets > summary, .version-group > summary, .icon-button, .remove-item, .entry-toggle, .mobile-view-nav button, .about-link { min-height: 44px; }
   .about-link { align-items: center; display: inline-flex; }
   .icon-button, .remove-item { min-width: 44px; }
 }

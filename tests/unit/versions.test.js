@@ -16,9 +16,22 @@ vm.runInContext([
   appSource.slice(versionStart, versionEnd),
   'globalThis.createVersion = createVersion;',
   'globalThis.duplicateVersion = duplicateVersion;',
-  'globalThis.applyVersion = applyVersion;'
+  'globalThis.applyVersion = applyVersion;',
+  'globalThis.splitBullets = splitBullets;',
+  'globalThis.splitSkillList = splitSkillList;'
 ].join('\n'), versionSandbox);
-const { createVersion, duplicateVersion, applyVersion } = versionSandbox;
+const { createVersion, duplicateVersion, applyVersion, splitBullets, splitSkillList } = versionSandbox;
+
+function storedVersion(fields) {
+  return {
+    hiddenBullets: {},
+    hiddenSkills: [],
+    title: '',
+    summary: '',
+    exportName: '',
+    ...fields
+  };
+}
 
 const requiredConstants = ['SCHEMA_VERSION', 'MAX_EXPERIENCE_ENTRIES', 'MAX_EDUCATION_ENTRIES', 'MAX_VERSIONS', 'ENTRY_ID_PATTERN'];
 const declarations = requiredConstants.map((name) => {
@@ -109,7 +122,17 @@ test('applyVersion hides only the chosen entries and does not mutate the master'
 test('duplicateVersion names the copy and keeps going when that name is taken', () => {
   let prefix = '';
   const hidden = ['exp_1'];
-  const version = { id: 'ver_1', name: 'Frontend', hiddenEntries: hidden };
+  const hiddenBullets = { exp_1: ['Alpha'] };
+  const version = {
+    id: 'ver_1',
+    name: 'Frontend',
+    hiddenEntries: hidden,
+    hiddenBullets,
+    hiddenSkills: ['Java'],
+    title: 'Engineer',
+    summary: 'Notes',
+    exportName: 'Ada file'
+  };
   const first = duplicateVersion(version, ['Frontend'], (value) => {
     prefix = value;
     return `${value}new`;
@@ -118,8 +141,17 @@ test('duplicateVersion names the copy and keeps going when that name is taken', 
   assert.equal(first.id, 'ver_new');
   assert.equal(first.name, 'Frontend copy');
   assert.deepEqual(first.hiddenEntries, ['exp_1']);
+  assert.deepEqual(plain(first.hiddenBullets), { exp_1: ['Alpha'] });
+  assert.deepEqual(plain(first.hiddenSkills), ['Java']);
+  assert.equal(first.title, 'Engineer');
+  assert.equal(first.summary, 'Notes');
+  assert.equal(first.exportName, 'Ada file');
   first.hiddenEntries.push('exp_9');
+  first.hiddenBullets.exp_1.push('Beta');
+  first.hiddenSkills.push('SQL');
   assert.deepEqual(hidden, ['exp_1']);
+  assert.deepEqual(hiddenBullets, { exp_1: ['Alpha'] });
+  assert.deepEqual(version.hiddenSkills, ['Java']);
 
   assert.equal(duplicateVersion(version, ['Frontend copy'], () => 'ver_2').name, 'Frontend copy 2');
   assert.equal(
@@ -136,7 +168,7 @@ test('createVersion trims the name and stores nothing as hidden', () => {
     return `${value}1`;
   });
   assert.equal(prefix, 'ver_');
-  assert.deepEqual(plain(created), { id: 'ver_1', name: 'Acme', hiddenEntries: [] });
+  assert.deepEqual(plain(created), storedVersion({ id: 'ver_1', name: 'Acme', hiddenEntries: [] }));
   assert.equal(createVersion('   ', () => 'ver_blank').name, 'Untitled version');
   assert.equal(createVersion('N'.repeat(150), () => 'ver_long').name.length, 120);
 });
@@ -158,9 +190,9 @@ test('normalizeVersionList fixes bad ids, duplicate ids, blank names, a 51st ite
     ]
   }, { strict: true }).versions;
   assert.deepEqual(plain(versions), [
-    { id: 'ver_ok', name: 'Frontend', hiddenEntries: ['exp_keep', 'edu_keep'] },
-    { id: 'ver_blank', name: 'Untitled version', hiddenEntries: [] },
-    { id: 'ver_bad_hidden', name: 'Plain', hiddenEntries: [] }
+    storedVersion({ id: 'ver_ok', name: 'Frontend', hiddenEntries: ['exp_keep', 'edu_keep'] }),
+    storedVersion({ id: 'ver_blank', name: 'Untitled version', hiddenEntries: [] }),
+    storedVersion({ id: 'ver_bad_hidden', name: 'Plain', hiddenEntries: [] })
   ]);
 
   const tooMany = Array.from({ length: 51 }, (_, index) => ({ id: `ver_${index}`, name: `Version ${index}` }));
@@ -191,4 +223,174 @@ test('assignEntryIds replaces ids that are too long or use other characters', ()
   assert.match(records[2].id, /^[A-Za-z0-9_-]{1,80}$/);
   assert.notEqual(records[3].id, 'exp_ok');
   assert.equal(records[1].role, 'B');
+});
+
+test('applyVersion hides bullets by text, skills case-insensitively, and overrides only when filled', () => {
+  const source = {
+    basics: { name: 'Ada Lovelace', title: 'Master title' },
+    summary: 'Master summary',
+    experience: [
+      { id: 'exp_1', role: 'Analyst', highlights: '- Alpha\n* Beta\n\u2022 Gamma' },
+      { id: 'exp_2', role: 'Inventor', highlights: '- Keep\n- Drop' }
+    ],
+    education: [{ id: 'edu_1', degree: 'Mathematics' }],
+    skills: 'Figma, Research, Prototyping'
+  };
+  const before = plain(source);
+  assert.deepEqual(plain(splitBullets(source.experience[0].highlights)), ['Alpha', 'Beta', 'Gamma']);
+  assert.deepEqual(plain(splitSkillList('Figma, user research | prototyping; accessibility')), [
+    'Figma',
+    'user research',
+    'prototyping',
+    'accessibility'
+  ]);
+
+  const hidden = applyVersion(source, {
+    hiddenEntries: [],
+    hiddenBullets: { exp_1: ['  - Beta  '], exp_2: ['Drop'] },
+    hiddenSkills: ['research'],
+    title: '',
+    summary: '   '
+  });
+  assert.equal(hidden.experience[0].highlights, '- Alpha\n\u2022 Gamma');
+  assert.equal(hidden.experience[1].highlights, '- Keep');
+  assert.equal(hidden.skills, 'Figma, Prototyping');
+  assert.equal(hidden.basics.title, 'Master title');
+  assert.equal(hidden.summary, 'Master summary');
+  assert.notEqual(hidden.experience[0], source.experience[0]);
+
+  const reordered = applyVersion({
+    ...source,
+    experience: [{ id: 'exp_1', highlights: '\u2022 Gamma\n- Alpha\n* Beta' }]
+  }, { hiddenBullets: { exp_1: ['Beta'] } });
+  assert.equal(reordered.experience[0].highlights, '\u2022 Gamma\n- Alpha');
+
+  const overridden = applyVersion(source, { title: 'Version title', summary: 'Version summary' });
+  assert.equal(overridden.basics.title, 'Version title');
+  assert.equal(overridden.summary, 'Version summary');
+  assert.equal(overridden.skills, source.skills);
+  overridden.basics.title = 'Changed';
+  overridden.summary = 'Changed';
+  overridden.skills = 'Changed';
+  overridden.experience[0].highlights = 'Changed';
+  assert.deepEqual(plain(source), before);
+
+  const piped = applyVersion({ skills: 'Alpha | Beta | Gamma' }, { hiddenSkills: ['BETA'] });
+  assert.equal(piped.skills, 'Alpha | Gamma');
+
+  const untouched = applyVersion(source, null);
+  assert.equal(untouched.basics.title, 'Master title');
+  assert.equal(untouched.summary, 'Master summary');
+  assert.equal(untouched.experience[0].highlights, source.experience[0].highlights);
+  untouched.experience.pop();
+  assert.equal(source.experience.length, 2);
+});
+
+test('normalizeVersionList drops bad hidden bullets and skills without rejecting the file', () => {
+  const manyBullets = Array.from({ length: 201 }, (_, index) => `Bullet ${index}`);
+  const manySkills = Array.from({ length: 201 }, (_, index) => `Skill ${index}`);
+  const versions = normalizeData({
+    schemaVersion: 2,
+    master: {
+      experience: [{ id: 'exp_keep', role: 'A' }],
+      education: [{ id: 'edu_keep', degree: 'BSc' }]
+    },
+    versions: [{
+      id: 'ver_ok',
+      name: 'Frontend',
+      hiddenBullets: {
+        exp_keep: ['  - Kept  ', '- Kept', 'Second', 4, 'x'.repeat(10001), ...manyBullets],
+        edu_keep: ['Not experience'],
+        missing: ['Gone']
+      },
+      hiddenSkills: ['Alpha', ' alpha ', 3, 'b'.repeat(201), 'Beta', ...manySkills],
+      title: `T${'t'.repeat(250)}`,
+      summary: 'S'.repeat(600),
+      exportName: 'E'.repeat(150)
+    }, {
+      id: 'ver_bad',
+      name: 'Bad',
+      hiddenBullets: 'nope',
+      hiddenSkills: { skill: 'Alpha' },
+      title: 5,
+      summary: null,
+      exportName: { name: 'file' }
+    }]
+  }, { strict: true }).versions;
+
+  const keptBullets = plain(versions[0].hiddenBullets.exp_keep);
+  assert.deepEqual(keptBullets.slice(0, 3), ['Kept', 'Second', 'Bullet 0']);
+  assert.equal(keptBullets.length, 200);
+  assert.equal(keptBullets.includes('x'.repeat(10001)), false);
+  assert.equal(versions[0].hiddenBullets.edu_keep, undefined);
+  assert.equal(versions[0].hiddenBullets.missing, undefined);
+  assert.equal(versions[0].hiddenSkills[0], 'Alpha');
+  assert.equal(versions[0].hiddenSkills[1], 'Beta');
+  assert.equal(versions[0].hiddenSkills.length, 200);
+  assert.equal(versions[0].title.length, 200);
+  assert.equal(versions[0].summary.length, 500);
+  assert.equal(versions[0].exportName.length, 120);
+  assert.deepEqual(plain(versions[1].hiddenBullets), {});
+  assert.deepEqual(plain(versions[1].hiddenSkills), []);
+  assert.equal(versions[1].title, '');
+  assert.equal(versions[1].summary, '');
+  assert.equal(versions[1].exportName, '');
+
+  assert.doesNotThrow(() => normalizeData({
+    schemaVersion: 2,
+    master: { experience: [{ id: 'exp_keep', role: 'A' }] },
+    versions: [{ id: 'ver_ok', name: 'Frontend', hiddenBullets: null, hiddenSkills: 'nope', title: 9 }]
+  }, { strict: false }));
+});
+
+test('toStorable drops unmatched hidden bullets and skills, and keeps a removed entry during undo', () => {
+  const toStorableStart = appSource.indexOf('function toStorable() {');
+  const toStorableEnd = appSource.indexOf('\nfunction loadData()', toStorableStart);
+  const storeSandbox = vm.createContext({
+    SCHEMA_VERSION: 2,
+    resumeData: {
+      skills: 'Alpha, Beta',
+      experience: [{ id: 'exp_1', highlights: '- Alpha\n- Beta' }],
+      education: []
+    },
+    cvVersions: [{
+      id: 'ver_1',
+      name: 'Short',
+      hiddenEntries: ['exp_1', 'exp_gone'],
+      hiddenBullets: { exp_1: ['Beta', '- Beta', 'Missing'], exp_missing: ['Nope'] },
+      hiddenSkills: ['beta', 'Gone', 'BETA'],
+      title: 'T',
+      summary: 'S',
+      exportName: 'File'
+    }],
+    pendingEntryRemoval: null
+  });
+  vm.runInContext([
+    appSource.slice(versionStart, versionEnd),
+    appSource.slice(toStorableStart, toStorableEnd),
+    'globalThis.toStorable = toStorable;'
+  ].join('\n'), storeSandbox);
+
+  const saved = plain(storeSandbox.toStorable());
+  assert.deepEqual(saved.versions[0].hiddenEntries, ['exp_1']);
+  assert.deepEqual(saved.versions[0].hiddenBullets, { exp_1: ['Beta'] });
+  assert.deepEqual(saved.versions[0].hiddenSkills, ['beta']);
+  assert.equal(saved.versions[0].title, 'T');
+  assert.equal(saved.versions[0].exportName, 'File');
+
+  storeSandbox.resumeData = { skills: 'Alpha', experience: [], education: [] };
+  storeSandbox.cvVersions[0].hiddenEntries = ['exp_undo'];
+  storeSandbox.cvVersions[0].hiddenBullets = { exp_undo: ['Secret', 'Old'] };
+  storeSandbox.pendingEntryRemoval = {
+    list: 'experience',
+    item: { id: 'exp_undo', highlights: '- Secret' }
+  };
+  const duringUndo = plain(storeSandbox.toStorable());
+  assert.deepEqual(duringUndo.versions[0].hiddenEntries, ['exp_undo']);
+  assert.deepEqual(duringUndo.versions[0].hiddenBullets, { exp_undo: ['Secret'] });
+
+  storeSandbox.pendingEntryRemoval = null;
+  const afterWindow = plain(storeSandbox.toStorable());
+  assert.deepEqual(afterWindow.versions[0].hiddenEntries, []);
+  assert.deepEqual(afterWindow.versions[0].hiddenBullets, {});
 });
