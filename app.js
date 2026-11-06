@@ -2157,18 +2157,33 @@ function updatePdfImportCard() {
   button.inert = !show;
 }
 
+let atsTipCount = -1;
 function renderAtsTips() {
   const tips = getAtsTips(resumeData);
+  const details = document.querySelector('#atsTips');
+  const summaryLabel = document.querySelector('#atsTipsSummary');
   const count = document.querySelector('#atsTipsCount');
-  if (count) count.textContent = `(${tips.length})`;
   const list = document.querySelector('#atsTipsList');
-  if (!list) return;
-  list.replaceChildren();
-  (tips.length ? tips : ['No ATS issues found.']).forEach((message) => {
-    const item = document.createElement('li');
-    item.textContent = message;
-    list.append(item);
-  });
+  if (summaryLabel) summaryLabel.textContent = tips.length ? 'ATS tips' : 'ATS tips: all good';
+  if (count) {
+    count.hidden = tips.length === 0;
+    count.textContent = tips.length ? `(${tips.length})` : '';
+  }
+  if (list) {
+    list.replaceChildren();
+    tips.forEach((message) => {
+      const item = document.createElement('li');
+      item.textContent = message;
+      list.append(item);
+    });
+    list.hidden = tips.length === 0;
+  }
+  if (details) {
+    details.classList.toggle('is-clear', tips.length === 0);
+    if (!tips.length) details.open = false;
+    else if (atsTipCount === 0) details.open = true;
+  }
+  atsTipCount = tips.length;
 }
 
 function setStatus(state, message) {
@@ -2301,19 +2316,51 @@ async function copyPlainText() {
     console.error('State CV could not copy plain text and downloaded it instead.', error);
   }
 }
-document.querySelector('#printButton').addEventListener('click', () => exportPdf(currentExportData()));
 let editViewScrollY = 0;
+let exportPopoverOpen = false;
+function phoneLayout() {
+  return window.matchMedia('(max-width: 1023px)').matches;
+}
+function exportPanelShouldShow() {
+  if (phoneLayout()) return document.querySelector('#appShell').dataset.mobileView === 'export';
+  return exportPopoverOpen;
+}
+function syncExportPanel({ focus = false } = {}) {
+  const panel = document.querySelector('#exportPanel');
+  const button = document.querySelector('#printButton');
+  const show = exportPanelShouldShow();
+  panel.hidden = !show;
+  panel.inert = !show;
+  button.setAttribute('aria-expanded', String(!phoneLayout() && exportPopoverOpen));
+  if (show && focus) panel.focus({ preventScroll: true });
+}
+function closeExportPopover({ returnFocus = false } = {}) {
+  const wasPhoneExport = phoneLayout() && document.querySelector('#appShell').dataset.mobileView === 'export';
+  exportPopoverOpen = false;
+  if (wasPhoneExport) {
+    setMobileView('edit');
+    if (returnFocus) document.querySelector('#mobileExportButton').focus();
+    return;
+  }
+  const panel = document.querySelector('#exportPanel');
+  if (returnFocus || panel.contains(document.activeElement)) document.querySelector('#printButton').focus();
+  syncExportPanel();
+}
 function setMobileView(view) {
   const appShell = document.querySelector('#appShell');
   const currentView = appShell.dataset.mobileView || 'edit';
-  if (view === 'preview' && currentView !== 'preview') editViewScrollY = window.scrollY;
+  const leavingEdit = (view === 'preview' || view === 'export') && currentView === 'edit';
+  if (leavingEdit) editViewScrollY = window.scrollY;
   appShell.dataset.mobileView = view;
   document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.mobileViewButton === view));
   });
-  if (view === 'edit' && currentView === 'preview') {
+  document.querySelector('#mobileExportButton').setAttribute('aria-pressed', String(view === 'export'));
+  const enteredExport = view === 'export' && currentView !== 'export' && phoneLayout();
+  syncExportPanel({ focus: enteredExport });
+  if (view === 'edit' && (currentView === 'preview' || currentView === 'export')) {
     window.requestAnimationFrame(() => window.scrollTo({ top: editViewScrollY, behavior: 'instant' }));
-  } else if (view === 'preview') {
+  } else if (view === 'preview' || view === 'export') {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
   if (view === 'preview') updatePreview();
@@ -2321,11 +2368,40 @@ function setMobileView(view) {
 document.querySelectorAll('[data-mobile-view-button]').forEach((button) => {
   button.addEventListener('click', () => setMobileView(button.dataset.mobileViewButton));
 });
-document.querySelector('#mobileExportButton').addEventListener('click', () => document.querySelector('#printButton').click());
+document.querySelector('#mobileExportButton').addEventListener('click', () => setMobileView('export'));
+document.querySelector('#printButton').addEventListener('click', () => {
+  if (phoneLayout()) {
+    setMobileView('export');
+    return;
+  }
+  exportPopoverOpen = !exportPopoverOpen;
+  if (exportPopoverOpen) closeMoreMenu();
+  if (!exportPopoverOpen && document.querySelector('#exportPanel').contains(document.activeElement)) {
+    document.querySelector('#printButton').focus();
+  }
+  syncExportPanel({ focus: exportPopoverOpen });
+});
+document.querySelector('#downloadPdfButton').addEventListener('click', () => exportPdf(currentExportData()));
+document.querySelector('#exportPanel').addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopPropagation();
+  closeExportPopover({ returnFocus: true });
+});
+document.querySelector('#atsTips').addEventListener('toggle', () => {
+  const details = document.querySelector('#atsTips');
+  if (details.open && !getAtsTips(resumeData).length) details.open = false;
+});
 window.addEventListener('beforeprint', () => updatePreview({ force: true }));
 window.matchMedia('(min-width: 1024px)').addEventListener('change', (event) => {
   updatePreview();
-  if (!event.matches) setSectionNavCollapsed(false);
+  if (!event.matches) {
+    setSectionNavCollapsed(false);
+    exportPopoverOpen = false;
+  } else if (document.querySelector('#appShell').dataset.mobileView === 'export') {
+    document.querySelector('#appShell').dataset.mobileView = 'edit';
+  }
+  syncExportPanel();
 });
 document.querySelector('#sectionNavToggle').addEventListener('click', () => {
   const expanded = document.querySelector('#sectionNavToggle').getAttribute('aria-expanded') === 'true';
@@ -2372,6 +2448,16 @@ function closeMoreMenu({ returnFocus = false } = {}) {
 }
 document.addEventListener('pointerdown', (event) => {
   if (moreMenu.open && !moreMenu.contains(event.target)) closeMoreMenu();
+  const exportAnchor = document.querySelector('.export-anchor');
+  if (exportPopoverOpen && exportAnchor && !exportAnchor.contains(event.target)) {
+    exportPopoverOpen = false;
+    syncExportPanel();
+  }
+});
+moreMenu.addEventListener('toggle', () => {
+  if (!moreMenu.open || !exportPopoverOpen) return;
+  exportPopoverOpen = false;
+  syncExportPanel();
 });
 moreMenu.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
