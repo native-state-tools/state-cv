@@ -106,10 +106,36 @@ async function openSection(page, name) {
   }).toPass({ timeout: 8000 });
 }
 
+async function openMenu(page) {
+  const summary = page.locator('.more-menu > summary');
+  const menu = page.locator('.more-menu');
+  if (!(await menu.evaluate((element) => element.open))) await summary.click();
+  await expect(page.locator('#moreMenuContent')).toBeVisible();
+}
+
 async function openDataDialog(page) {
-  await page.locator('.more-menu > summary').click();
+  await openMenu(page);
   await page.getByRole('button', { name: 'Your data' }).click();
   await expect(page.getByRole('dialog', { name: 'Your data' })).toBeVisible();
+}
+
+async function openExport(page) {
+  const menu = page.locator('.more-menu');
+  if (await menu.evaluate((element) => element.open)) await page.locator('.more-menu > summary').click();
+  const phoneExport = page.locator('#mobileExportButton');
+  if (await phoneExport.isVisible()) {
+    if ((await page.locator('#appShell').getAttribute('data-mobile-view')) !== 'export') await phoneExport.click();
+  } else if ((await page.locator('#printButton').getAttribute('aria-expanded')) !== 'true') {
+    await page.locator('#printButton').click();
+  }
+  await expect(page.locator('#exportPanel')).toBeVisible();
+}
+
+async function exportPdfFromUi(page) {
+  await openExport(page);
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#downloadPdfButton').click();
+  return downloadPromise;
 }
 
 async function savedName(page) {
@@ -229,9 +255,7 @@ async function readPdfDocument(page, download) {
 }
 
 async function exportPdfDownload(page) {
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export PDF' }).click();
-  return readPdfDocument(page, await downloadPromise);
+  return readPdfDocument(page, await exportPdfFromUi(page));
 }
 
 test('start screen shows the expected local CV options', async ({ page }) => {
@@ -421,6 +445,19 @@ test('phone-360 section tab row is visible and the bottom bar keeps Edit, Previe
   await expect(bar.getByRole('button', { name: 'Preview', exact: true })).toBeVisible();
   await expect(bar.locator('#mobileExportButton')).toHaveText('Export');
   await expect(bar.locator('#mobileExportButton')).toBeVisible();
+  await bar.locator('#mobileExportButton').click();
+  await expect(page.locator('#appShell')).toHaveAttribute('data-mobile-view', 'export');
+  await expect(bar.locator('#mobileExportButton')).toHaveAttribute('aria-pressed', 'true');
+  await expect(bar.getByRole('button', { name: 'Edit', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(bar.getByRole('button', { name: 'Preview', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#exportPanel')).toBeVisible();
+  await expect(page.locator('#downloadPdfButton')).toBeVisible();
+  await expect(page.locator('.editor-panel')).toBeHidden();
+  await expect(page.locator('#previewPanel')).toBeHidden();
+  await bar.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.locator('#appShell')).toHaveAttribute('data-mobile-view', 'edit');
+  await expect(bar.locator('#mobileExportButton')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#exportPanel')).toBeHidden();
 });
 
 test('edited fields persist after reload', async ({ page }) => {
@@ -780,7 +817,7 @@ test('200 percent root text setting keeps phone layout and controls in bounds', 
   if (isMobile) expect(dimensions.overlappingRemoveTargets).toBe(0);
 });
 
-test('active view exposes one h1 and More opens and closes by keyboard', async ({ page }) => {
+test('active view exposes one h1 and Menu opens and closes by keyboard', async ({ page }) => {
   await openApp(page);
   expect(await visibleLevelOneHeadings(page)).toBe(1);
   await enterEditor(page);
@@ -820,7 +857,7 @@ test('keyboard Tab reaches the editor and navigation controls', async ({ page, i
   await openApp(page);
   await enterEditor(page);
   await page.locator('#brandHome').focus();
-  const shellTargets = new Set(['importButton']);
+  const shellTargets = new Set();
   if (isMobile) {
     shellTargets.add('mobileExportButton');
     shellTargets.add('edit');
@@ -877,6 +914,12 @@ test('WCAG contrast for text, controls, focus, links, placeholders, and notices 
       const values = [luminance(visibleForeground), luminance(background)].sort((a, b) => b - a);
       return Number(((values[0] + 0.05) / (values[1] + 0.05)).toFixed(2));
     };
+    const exportPanel = document.querySelector('#exportPanel');
+    exportPanel.hidden = false;
+    exportPanel.inert = false;
+    document.querySelector('.more-menu').open = true;
+    const dataDialog = document.querySelector('#yourDataDialog');
+    if (!dataDialog.open) dataDialog.show();
     const root = getComputedStyle(document.documentElement);
     const canvas = root.getPropertyValue('--canvas').trim();
     const paper = root.getPropertyValue('--paper').trim();
@@ -963,9 +1006,7 @@ test('WCAG contrast for text, controls, focus, links, placeholders, and notices 
 test('PDF export fires a download containing a PDF file', async ({ page }) => {
   await openApp(page);
   await enterEditor(page);
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export PDF' }).click();
-  const download = await downloadPromise;
+  const download = await exportPdfFromUi(page);
   expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
@@ -1008,6 +1049,7 @@ test('PDF export of a filled CV keeps reading order and omits placeholders', asy
   expect(raw).toContain('/Lang (en)');
   expect(raw).toContain('Alex Morgan');
 
+  if (await page.locator('#mobileExportButton').isVisible()) await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByLabel('Full name').fill('');
   await page.getByLabel('Professional title').fill('');
   await expect(page.locator('#saveStatus')).toContainText('Saved locally');
@@ -1022,7 +1064,7 @@ test('PDF export of a filled CV keeps reading order and omits placeholders', asy
 
 test('plain text download contains the CV in reading order', async ({ page }) => {
   await openStoredCv(page, filledCv);
-  await page.locator('.more-menu > summary').click();
+  await openExport(page);
   await expect(page.locator('input[name="textSize"]:checked')).toHaveValue('standard');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download .txt' }).click();
@@ -1063,24 +1105,27 @@ test('Text size Large increases the preview bullet size', async ({ page, isMobil
   const bullet = preview.locator('.entry-bullets li').first();
   const standardSize = await bullet.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.locator('.more-menu > summary').click();
+  await openExport(page);
+  await expect(page.locator('.text-size-hint')).toContainText('Compact 9 pt');
+  await expect(page.locator('.text-size-hint')).toContainText('Standard 10.5 pt');
+  await expect(page.locator('.text-size-hint')).toContainText('Large 12 pt');
   await page.locator('input[name="paperSize"][value="letter"]').focus();
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('input[name="paperSize"]:checked')).toHaveValue('a4');
-  await expect(page.locator('#moreMenuContent')).toBeVisible();
+  await expect(page.locator('#exportPanel')).toBeVisible();
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('input[name="paperSize"]:checked')).toHaveValue('letter');
   expect(await page.locator('#formatLabel').textContent()).toContain('Letter');
   await page.locator('input[name="textSize"][value="compact"]').check();
-  await expect(page.locator('#moreMenuContent')).toBeVisible();
+  await expect(page.locator('#exportPanel')).toBeVisible();
   await expect(preview).toHaveClass(/preview-text-compact/);
   await page.keyboard.press('Escape');
   if (isMobile) await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const compactSummary = await summary.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   if (isMobile) await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.locator('.more-menu > summary').click();
+  await openExport(page);
   await page.locator('input[name="textSize"][value="large"]').check();
-  await expect(page.locator('#moreMenuContent')).toBeVisible();
+  await expect(page.locator('#exportPanel')).toBeVisible();
   await expect(preview).toHaveClass(/preview-text-large/);
   await expect(preview).not.toHaveClass(/preview-text-standard/);
   await page.keyboard.press('Escape');
@@ -1099,7 +1144,7 @@ test('Copy as plain text shows a local status', async ({ page, context }) => {
     permissionsGranted = false;
   }
   await openStoredCv(page, filledCv);
-  await page.locator('.more-menu > summary').click();
+  await openExport(page);
   await page.getByRole('button', { name: 'Copy as plain text' }).click();
   await expect(page.locator('#saveStatus')).toContainText(
     permissionsGranted ? 'Plain text copied' : /Plain text copied|Clipboard blocked\. Plain text downloaded/
@@ -1123,9 +1168,7 @@ test('unsupported characters are named when a PDF is exported', async ({ page })
     education: [{ degree: '', school: '', dates: '' }],
     skills: ''
   });
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export PDF' }).click();
-  const download = await downloadPromise;
+  const download = await exportPdfFromUi(page);
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   expect((await fs.readFile(downloadPath)).subarray(0, 4).toString('ascii')).toBe('%PDF');
@@ -1139,8 +1182,10 @@ test('unsupported characters are named when a PDF is exported', async ({ page })
 test('ATS tips on a fresh CV include the missing email', async ({ page }) => {
   await openApp(page);
   await enterEditor(page);
+  await openExport(page);
   const tips = page.locator('#atsTips');
   await expect(tips).toBeVisible();
+  await expect(tips.locator('#atsTipsSummary')).toHaveText('ATS tips');
   await expect(tips.locator('#atsTipsList')).toContainText('Add your email.');
   await expect(tips.locator('#atsTipsCount')).toHaveText('(5)');
   const dimensions = await page.evaluate(() => ({
@@ -1153,9 +1198,12 @@ test('ATS tips on a fresh CV include the missing email', async ({ page }) => {
 test('ATS tips drop the missing email after the fields are filled and the count updates', async ({ page }) => {
   await openApp(page);
   await enterEditor(page);
+  await openExport(page);
   const count = page.locator('#atsTipsCount');
   await expect(count).toHaveText('(5)');
   await expect(page.locator('#atsTipsList')).toContainText('Add your email.');
+  if (await page.locator('#mobileExportButton').isVisible()) await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  else await page.keyboard.press('Escape');
   await page.getByLabel('Full name').fill('Alex Morgan');
   await page.getByLabel('Email').fill('alex@example.com');
   await page.getByLabel('Phone').fill('(555) 123-4567');
@@ -1163,9 +1211,10 @@ test('ATS tips drop the missing email after the fields are filled and the count 
   await page.getByRole('textbox', { name: /^Summary \d/ }).fill('Builds clear tools for operations teams.');
   await openSection(page, 'Skills');
   await page.getByLabel(/^Skills/).fill('Figma, research');
-  await expect(page.locator('#atsTipsList')).toHaveText('No ATS issues found.');
+  await openExport(page);
+  await expect(page.locator('#atsTipsSummary')).toHaveText('ATS tips: all good');
   await expect(page.locator('#atsTipsList')).not.toContainText('Add your email.');
-  await expect(count).toHaveText('(0)');
+  await expect(count).toBeHidden();
 });
 
 test('service worker controls the app and supports an offline reload', async ({ page }) => {
@@ -1858,8 +1907,7 @@ test('Landing page opens from file://', async ({ page }, testInfo) => {
 async function openVersions(page) {
   const edit = page.getByRole('button', { name: 'Edit', exact: true });
   if (await edit.isVisible() && await edit.getAttribute('aria-pressed') !== 'true') await edit.click();
-  const menu = page.locator('.more-menu');
-  if (!(await menu.evaluate((element) => element.open))) await page.locator('.more-menu > summary').click();
+  await openMenu(page);
   await expect(page.getByLabel('Version', { exact: true })).toBeVisible();
 }
 
@@ -1908,7 +1956,7 @@ test('versions hide one experience entry in preview and plain text, then survive
 
   await expectVersionPreview(page, { present: 'Visible Role', absent: 'Hidden Role' });
 
-  await openVersions(page);
+  await openExport(page);
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download .txt' }).click();
   const download = await downloadPromise;
@@ -1990,7 +2038,7 @@ test('versions hide one bullet and one skill, override title and summary, and ke
   await expect(preview).not.toContainText('Master Title');
   await expect(preview).not.toContainText('Master summary text');
 
-  await openVersions(page);
+  await openExport(page);
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download .txt' }).click();
   const download = await downloadPromise;
@@ -2002,13 +2050,14 @@ test('versions hide one bullet and one skill, override title and summary, and ke
   expect(content).not.toContain('ZebraSkill');
   expect(content).toContain('KeptSkill');
 
-  await openVersions(page);
+  await openExport(page);
   await page.locator('#exportFilename').fill('Acme file');
   await expect.poll(() => page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
     const version = data.versions && data.versions[0];
     return version && version.exportName === 'Acme file' && data.master.exportName === '';
   })).toBe(true);
+  await openMenu(page);
   await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Master CV' });
   await expect(page.locator('#exportFilename')).toHaveValue('Alex Morgan CV');
   await expectVersionPreview(page, { present: 'HiddenBulletLine' });
