@@ -17,7 +17,7 @@ Contact: [hello@nativestatetools.com](mailto:hello@nativestatetools.com)
 1. Start a new CV, or import a PDF or a JSON backup. PDF import is on the start screen and in the editor. JSON backups use **Import**.
 2. Edit contact details, summary, experience, education, and skills. The preview updates as you type, and edits save in this browser.
 3. Open **Export** and check the ATS tips.
-4. Choose **Download PDF**, or use **Copy as plain text** or **Download .txt**. On a phone, **Export** is the bottom-bar view. On a wide screen, **Export PDF** opens the same options. Open **Menu** and pick a **Version** to export a shorter copy of the same CV. A version can hide entries, bullets, and skills, and it can use its own title, summary, and file name. Editing still changes the master CV.
+4. Choose **Download PDF**, or use **Copy as plain text** or **Download .txt**. On a phone, **Export** is the bottom-bar view. On a wide screen, **Export PDF** opens the same options. The version pill in the top bar switches from the master CV to a tailored version. **Tailor** chooses which entries, bullets, and skills that version includes, and can set its title and summary. Editing the form still changes the master CV. Preview, PDF, and plain text follow the version you are viewing.
 5. Download a backup from **Menu** (**Backup (JSON)**) or from **Your data** (**Download backup**).
 
 If the saved CV has real content, importing a PDF or a JSON backup asks you to confirm before it replaces the current CV. A copy is kept in **Your data** under **Recent snapshots**. A blank saved CV, such as one from **Start a new CV** or **Start new CV** with nothing typed, does not ask. If the saved data could not be read, the question says that no snapshot copy is available.
@@ -62,7 +62,7 @@ PDF import reads selectable text in the browser and maps common contact, summary
 
 Letter is the default for US applications. A4 is available for international applications.
 
-**Download PDF** creates a native Letter or A4 PDF with selectable text, controlled page breaks, and no browser date, URL, or page labels. The browser print dialog is only used as a fallback if the local PDF library cannot load. Export can also copy the CV as plain text or download a .txt file; both stay on this device. **Menu** holds import, JSON backup, Your data, versions, and Start new CV.
+**Download PDF** creates a native Letter or A4 PDF with selectable text, controlled page breaks, and no browser date, URL, or page labels. The browser print dialog is only used as a fallback if the local PDF library cannot load. Export can also copy the CV as plain text or download a .txt file; both stay on this device. **Menu** holds import, JSON backup, Your data, and Start new CV. The version pill switches which CV you are viewing, and Tailor mode chooses what that version includes.
 
 ## Offline operation
 

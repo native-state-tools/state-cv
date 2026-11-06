@@ -40,6 +40,9 @@
     <p id="undoToastMessage"></p>
     <button class="button button-accent" id="undoRemovalButton" type="button">Undo</button>
   </div>
+  <div class="action-toast" id="actionToast" role="status" hidden inert>
+    <p id="actionToastMessage"></p>
+  </div>
   <section class="launch-screen" id="launchScreen" aria-label="State CV start screen">
     <div class="launch-glow launch-glow-one"></div>
     <div class="launch-glow launch-glow-two"></div>
@@ -64,7 +67,34 @@
         <span class="brand-mark">S</span>
         <span>State <b>CV</b></span>
       </a>
-      <span id="versionPillSlot" inert></span>
+      <div id="versionPillSlot" class="version-anchor">
+        <button class="version-pill" id="versionPill" type="button" aria-expanded="false" aria-controls="versionSheet" aria-haspopup="dialog">
+          <span class="version-pill-dot" aria-hidden="true"></span>
+          <span id="versionPillLabel">Master CV</span>
+          <span class="version-pill-caret" aria-hidden="true">▾</span>
+        </button>
+        <div id="versionSheetBackdrop" class="version-sheet-backdrop" hidden inert></div>
+        <div id="versionSheet" class="version-sheet" role="dialog" aria-labelledby="versionSheetLegend" aria-modal="false" hidden inert tabindex="-1">
+          <fieldset class="version-choices">
+            <legend id="versionSheetLegend">Version</legend>
+            <div class="version-radio-list" id="versionRadioList"></div>
+          </fieldset>
+          <button class="button button-dark" id="newVersionButton" type="button"><span aria-hidden="true">+</span> New version</button>
+          <div class="versions-actions">
+            <button class="button button-dark" id="renameVersionButton" type="button" disabled>Rename</button>
+            <button class="button button-dark" id="duplicateVersionButton" type="button" disabled>Duplicate</button>
+            <button class="button button-danger" id="deleteVersionButton" type="button" disabled>Delete</button>
+          </div>
+          <div class="versions-rename" id="versionRename" hidden inert>
+            <label class="field" for="versionRenameInput"><span>Version name</span><input id="versionRenameInput" type="text" maxlength="120" enterkeyhint="done" autocomplete="off" spellcheck="false" /></label>
+            <div class="versions-rename-actions">
+              <button class="button button-accent" id="versionRenameSave" type="button">Save name</button>
+              <button class="button button-ghost" id="versionRenameCancel" type="button">Cancel</button>
+            </div>
+          </div>
+          <button class="button button-dark" id="tailorFromSheetButton" type="button" hidden inert>Tailor</button>
+        </div>
+      </div>
       <div class="workspace-label"><span class="workspace-pulse"></span><span id="workspaceName">Untitled CV</span><small>Local workspace</small></div>
       <div class="topbar-actions">
         <span class="save-status" id="saveStatus" aria-live="polite"><span class="status-dot"></span>Saved locally</span>
@@ -107,37 +137,6 @@
             <button class="button button-dark" id="exportButton" type="button"><span aria-hidden="true">↧</span> Backup (JSON)</button>
             <button class="button button-dark" id="yourDataButton" type="button">Your data</button>
             <a class="about-link" href="https://ko-fi.com/nativestatetools" rel="noopener noreferrer" target="_blank">Support State CV</a>
-            <div class="versions-panel" id="versionsPanel">
-              <div class="versions-select"><label for="versionSelect">Version</label><select id="versionSelect"></select></div>
-              <p class="versions-hint" id="versionEditHint" hidden inert>Edits change your master CV.</p>
-              <div class="versions-actions">
-                <button class="button button-dark" id="newVersionButton" type="button">New version</button>
-                <button class="button button-dark" id="renameVersionButton" type="button" disabled>Rename</button>
-                <button class="button button-dark" id="duplicateVersionButton" type="button" disabled>Duplicate</button>
-                <button class="button button-danger" id="deleteVersionButton" type="button" disabled>Delete</button>
-              </div>
-              <div class="versions-rename" id="versionRename" hidden inert>
-                <label class="field" for="versionRenameInput"><span>Version name</span><input id="versionRenameInput" type="text" maxlength="120" enterkeyhint="done" autocomplete="off" spellcheck="false" /></label>
-                <div class="versions-rename-actions">
-                  <button class="button button-accent" id="versionRenameSave" type="button">Save name</button>
-                  <button class="button button-ghost" id="versionRenameCancel" type="button">Cancel</button>
-                </div>
-              </div>
-              <fieldset class="version-entries" id="versionEntries" hidden inert>
-                <legend>Show in this version</legend>
-                <div class="version-entry-list" id="versionEntryList"></div>
-                <details class="version-group" id="versionSkills">
-                  <summary>Skills</summary>
-                  <div class="version-choice-list" id="versionSkillList"></div>
-                </details>
-                <details class="version-group" id="versionCopy">
-                  <summary>Title and summary</summary>
-                  <p class="versions-hint">Leave blank to use your master CV.</p>
-                  <label class="field" for="versionTitle"><span>Title for this version</span><input id="versionTitle" type="text" maxlength="200" autocomplete="off" enterkeyhint="next" spellcheck="true" /></label>
-                  <label class="field" for="versionSummary"><span>Summary for this version <b class="character-count" id="versionSummaryCount">0 / 500</b></span><textarea id="versionSummary" maxlength="500" rows="4" enterkeyhint="enter"></textarea></label>
-                </details>
-              </fieldset>
-            </div>
             <button class="button button-danger" id="startNewCvButton" type="button">Start new CV</button>
           </div>
         </details>
@@ -149,6 +148,10 @@
     <main class="workspace">
       <section class="editor-panel" aria-label="CV editor" data-sections-collapsed="false">
         <div class="editor-body">
+          <div id="versionBanner" class="version-banner" hidden inert>
+            <p id="versionBannerText"></p>
+            <button class="button button-dark" id="versionBannerTailor" type="button">Tailor</button>
+          </div>
           <nav class="section-nav" aria-label="CV sections">
             <button class="section-nav-toggle button button-ghost" id="sectionNavToggle" type="button" aria-expanded="true" aria-controls="sectionNavList" aria-label="Collapse sections"><span class="section-nav-toggle-icon" aria-hidden="true">«</span></button>
             <ol class="section-nav-list" id="sectionNavList">
@@ -169,6 +172,27 @@
             </div>
 
             <div class="quick-actions"><button class="quick-action" id="importPdfButton" type="button"><span class="quick-icon">PDF</span><span><strong>Start from a PDF</strong><small>Extract your existing CV</small></span><span class="quick-arrow">↗</span></button></div>
+
+            <div id="tailorPanel" class="tailor-panel" hidden inert>
+              <div class="tailor-bar">
+                <h2 id="tailorHeading" tabindex="-1">Tailoring</h2>
+                <button class="button button-accent" id="tailorDoneButton" type="button">Done</button>
+              </div>
+              <fieldset class="version-entries" id="versionEntries">
+                <legend>Show in this version</legend>
+                <div class="version-entry-list" id="versionEntryList"></div>
+                <details class="version-group" id="versionSkills">
+                  <summary>Skills</summary>
+                  <div class="version-choice-list" id="versionSkillList"></div>
+                </details>
+                <details class="version-group" id="versionCopy">
+                  <summary>Title and summary</summary>
+                  <p class="versions-hint">Leave blank to use your master CV.</p>
+                  <label class="field" for="versionTitle"><span>Title for this version</span><input id="versionTitle" type="text" maxlength="200" autocomplete="off" enterkeyhint="next" spellcheck="true" /></label>
+                  <label class="field" for="versionSummary"><span>Summary for this version <b class="character-count" id="versionSummaryCount">0 / 500</b></span><textarea id="versionSummary" maxlength="500" rows="4" enterkeyhint="enter"></textarea></label>
+                </details>
+              </fieldset>
+            </div>
 
             <form id="resumeForm" autocomplete="off">
               <section class="form-section" data-editor-section="contact">
