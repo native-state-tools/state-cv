@@ -261,8 +261,24 @@ async function exportPdfDownload(page) {
 test('start screen shows the expected local CV options', async ({ page }) => {
   await openApp(page);
   await expect(page.getByRole('button', { name: 'Start a new CV' })).toBeVisible();
+  await expect(page.locator('#newCvButton')).toHaveClass(/launch-card-primary/);
+  await expect(page.locator('#continueButton')).not.toHaveClass(/launch-card-primary/);
+  await expect(page.locator('#continueButton')).toContainText('No saved draft yet');
   await expect(page.getByRole('button', { name: 'Import a PDF' })).toBeVisible();
   await expect(page.getByText('Your data stays in this browser')).toBeVisible();
+});
+
+test('launch screen highlights Continue when a draft is saved', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await page.getByLabel('Full name').fill('Alex Morgan');
+  await expect(page.locator('#saveStatus')).toContainText('Saved locally');
+  await page.locator('#brandHome').click();
+  await expect(page.locator('#continueButton')).toBeVisible();
+  await expect(page.locator('#continueButton')).toHaveClass(/launch-card-primary/);
+  await expect(page.locator('#continueButton')).toContainText('Continue Alex Morgan');
+  await expect(page.locator('#newCvButton')).not.toHaveClass(/launch-card-primary/);
+  await expect(page.locator('#newCvButton')).toBeVisible();
 });
 
 test('viewport layout has no horizontal overflow and the bottom bar matches the breakpoint', async ({ page, isMobile }) => {
@@ -777,14 +793,14 @@ test('200 percent root text setting keeps phone layout and controls in bounds', 
     const topbar = document.querySelector('.topbar');
     const sectionNav = document.querySelector('.section-nav');
     const obscuredFields = [];
+    const overlaps = (first, second) =>
+      Math.min(first.right, second.right) > Math.max(first.left, second.left) &&
+      Math.min(first.bottom, second.bottom) > Math.max(first.top, second.top);
     [...document.querySelectorAll('#resumeForm input, #resumeForm textarea')].forEach((field) => {
       field.scrollIntoView({ behavior: 'instant', block: 'nearest' });
       const box = field.getBoundingClientRect();
       const navBox = nav.getBoundingClientRect();
       const topbarBox = topbar.getBoundingClientRect();
-      const overlaps = (first, second) =>
-        Math.min(first.right, second.right) > Math.max(first.left, second.left) &&
-        Math.min(first.bottom, second.bottom) > Math.max(first.top, second.top);
       if (getComputedStyle(nav).display !== 'none' && overlaps(box, navBox)) {
         obscuredFields.push(field.dataset.path || field.dataset.key);
       }
@@ -795,10 +811,11 @@ test('200 percent root text setting keeps phone layout and controls in bounds', 
         obscuredFields.push(field.dataset.path || field.dataset.key);
       }
     });
-    const overlappingRemoveTargets = [...document.querySelectorAll('.repeat-item')].filter((item) =>
-      item.querySelector('.remove-item').getBoundingClientRect().bottom >
-      item.querySelector('.form-grid').getBoundingClientRect().top
-    ).length;
+    const overlappingRemoveTargets = [...document.querySelectorAll('.repeat-item')].filter((item) => {
+      const remove = item.querySelector('.remove-item');
+      const grid = item.querySelector('.form-grid');
+      return Boolean(remove && grid && overlaps(remove.getBoundingClientRect(), grid.getBoundingClientRect()));
+    }).length;
     return {
       width: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -1239,7 +1256,7 @@ test('service worker controls the app and supports an offline reload', async ({ 
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
 });
 
-test('Undo restores a removed experience entry and keeps it after reload', async ({ page }) => {
+test('Undo restores a removed experience entry and keeps it after reload', async ({ page, isMobile }) => {
   await openApp(page);
   await enterEditor(page);
   await openSection(page, 'Experience');
@@ -1248,6 +1265,25 @@ test('Undo restores a removed experience entry and keeps it after reload', async
   const toast = page.locator('#undoToast');
   await expect(toast).toBeVisible();
   await expect(toast).toContainText('Experience entry removed');
+  if (isMobile) {
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const clearance = await page.evaluate(() => {
+      const toastBox = document.querySelector('#undoToast').getBoundingClientRect();
+      const pager = document.querySelector('[data-editor-section="experience"] .section-pager').getBoundingClientRect();
+      const bar = document.querySelector('.mobile-view-nav').getBoundingClientRect();
+      return {
+        pagerBottom: pager.bottom,
+        toastTop: toastBox.top,
+        toastBottom: toastBox.bottom,
+        barTop: bar.top
+      };
+    });
+    expect(clearance.pagerBottom).toBeLessThanOrEqual(clearance.toastTop + 1);
+    expect(clearance.toastBottom).toBeLessThanOrEqual(clearance.barTop + 1);
+  }
   await expect(page.getByLabel('Job title')).toHaveValue('');
   const undo = page.getByRole('button', { name: 'Undo' });
   await undo.focus();
@@ -1302,14 +1338,14 @@ test('Backup reminder shows after many edits and stays hidden after Remind me in
   await page.evaluate(() => {
     localStorage.setItem('state-cv-backup-reminder-v1', JSON.stringify({
       lastBackupAt: 0,
-      editsSinceBackup: 20,
+      editsSinceBackup: 50,
       snoozeUntil: 0
     }));
   });
   await page.reload();
   const notice = page.locator('#backupReminder');
   await expect(notice).toBeVisible();
-  await expect(notice).toContainText("You've made a lot of changes. Download a backup to keep a copy safe.");
+  await expect(notice).toContainText('Good time to download a backup?');
   const dimensions = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth
@@ -1485,7 +1521,7 @@ test('Backup reminder Download backup starts a JSON download and resets the coun
   await page.evaluate(() => {
     localStorage.setItem('state-cv-backup-reminder-v1', JSON.stringify({
       lastBackupAt: 0,
-      editsSinceBackup: 20,
+      editsSinceBackup: 50,
       snoozeUntil: 0
     }));
   });
@@ -1502,6 +1538,30 @@ test('Backup reminder Download backup starts a JSON download and resets the coun
   })).toBe(0);
   const lastBackupAt = await page.evaluate(() => JSON.parse(localStorage.getItem('state-cv-backup-reminder-v1')).lastBackupAt);
   expect(lastBackupAt).toBeGreaterThan(Date.now() - 60_000);
+  await expect(notice).toBeHidden();
+});
+
+test('Backup reminder Not now snoozes for about 30 days and stays hidden after reload', async ({ page }) => {
+  await page.goto('/app/');
+  await page.evaluate(() => {
+    localStorage.setItem('state-cv-backup-reminder-v1', JSON.stringify({
+      lastBackupAt: 0,
+      editsSinceBackup: 50,
+      snoozeUntil: 0
+    }));
+  });
+  await page.reload();
+  const notice = page.locator('#backupReminder');
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText('Good time to download a backup?');
+  await notice.getByRole('button', { name: 'Not now' }).click();
+  await expect(notice).toBeHidden();
+  const snoozeUntil = await page.evaluate(() => JSON.parse(localStorage.getItem('state-cv-backup-reminder-v1')).snoozeUntil);
+  const month = 30 * 24 * 60 * 60 * 1000;
+  expect(snoozeUntil).toBeGreaterThan(Date.now() + month - 60_000);
+  expect(snoozeUntil).toBeLessThan(Date.now() + month + 60_000);
+  await page.reload();
+  await expect(page.getByRole('button', { name: /Continue/ })).toBeVisible();
   await expect(notice).toBeHidden();
 });
 
@@ -2218,6 +2278,19 @@ test('version pill, Viewing banner, and Tailor stay out of Menu', async ({ page 
     await expect(page.getByRole('radio', { name: 'Master CV', exact: true })).toBeFocused();
   }
   await page.getByRole('button', { name: 'New version', exact: true }).click();
+  await expect(page.locator('#actionToast')).toContainText('Version created');
+  const toastClearsBanner = await page.evaluate(() => {
+    const toast = document.querySelector('#actionToast').getBoundingClientRect();
+    const targets = ['#versionBanner', '#versionBannerText', '#versionBannerTailor'].map((selector) =>
+      document.querySelector(selector).getBoundingClientRect()
+    );
+    const hits = (target) =>
+      target.width > 0 && target.height > 0 &&
+      Math.min(toast.right, target.right) > Math.max(toast.left, target.left) &&
+      Math.min(toast.bottom, target.bottom) > Math.max(toast.top, target.top);
+    return targets.every((target) => !hits(target));
+  });
+  expect(toastClearsBanner).toBe(true);
   await expect(page.locator('#versionPill')).toContainText('Untitled version');
   await expect(page.locator('#versionBanner')).toContainText('Viewing Untitled version · Edits change your master CV');
   await expect(page.locator('#saveStatus')).toContainText('Saved locally');
@@ -2228,12 +2301,14 @@ test('version pill, Viewing banner, and Tailor stay out of Menu', async ({ page 
   await expect(page.locator('#versionPill')).toBeFocused();
 
   await page.locator('#versionBannerTailor').click();
+  await expect(page.locator('#versionBannerTailor')).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Tailoring: Untitled version' })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Show in this version' })).toBeVisible();
   await expect(page.locator('#resumeForm')).toBeHidden();
   if (await page.locator('#previewPanel').isVisible()) await expect(page.locator('#resumePreview')).toBeVisible();
   await page.locator('#tailorDoneButton').click();
   await expect(page.locator('#tailorPanel')).toBeHidden();
+  await expect(page.locator('#versionBannerTailor')).toBeVisible();
   await expect(page.locator('#resumeForm')).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Contact details' })).toBeVisible();
 

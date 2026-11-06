@@ -338,6 +338,7 @@ function exportPdf(data) {
       ? 'PDF exported. If it opens, tap Share > Save to Files'
       : 'PDF exported. Download started.';
     setImportStatus(unsupportedNote ? `${downloadMessage} ${unsupportedNote}` : downloadMessage);
+    if (typeof noteSuccessfulPdfExport === 'function') noteSuccessfulPdfExport();
   } catch (error) {
     console.error('State CV could not export a PDF.', error);
     setImportStatus('PDF export failed. Please try again.', true);

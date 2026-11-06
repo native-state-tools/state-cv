@@ -57,8 +57,9 @@ migratePendingV1();
 let saveTimer;
 const BACKUP_REMINDER_KEY = 'state-cv-backup-reminder-v1';
 const BACKUP_REMINDER_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const BACKUP_REMINDER_LATER_MS = 30 * 24 * 60 * 60 * 1000;
 let backupReminder = readBackupReminder();
-let backupReminderDismissed = false;
+let pdfExportNeedsBackupReminder = false;
 let pendingVersionRemoval = null;
 let undoToastTimer = null;
 let actionToastTimer = null;
@@ -814,9 +815,23 @@ function noteBackupReminderEdit() {
   }
 }
 
+function noteSuccessfulPdfExport() {
+  if (finiteReminderNumber(backupReminder.lastBackupAt) > 0) return;
+  pdfExportNeedsBackupReminder = true;
+  updateBackupReminderNotice();
+}
+
+function snoozeBackupReminder(durationMs) {
+  pdfExportNeedsBackupReminder = false;
+  backupReminder.snoozeUntil = Date.now() + durationMs;
+  writeBackupReminder(backupReminder);
+  hideBackupReminder();
+}
+
 function updateBackupReminderNotice() {
-  if (backupReminderDismissed || storageDamaged || storageLoadFailed || storageWriteFailed ||
-      !shouldRemindBackup(backupReminder, Date.now())) {
+  const exportOpen = exportPanelShouldShow();
+  if (storageDamaged || storageLoadFailed || storageWriteFailed || exportOpen ||
+      !shouldRemindBackup(backupReminder, Date.now(), { afterPdfExport: pdfExportNeedsBackupReminder })) {
     hideBackupReminder();
     return;
   }
@@ -880,6 +895,30 @@ function showUndoToast(listName) {
   toast.hidden = false;
   toast.inert = false;
   undoToastTimer = setTimeout(hideUndoToast, 8000);
+  syncUndoToastSpace();
+}
+
+function syncUndoToastSpace() {
+  const root = document.documentElement;
+  const toast = document.querySelector('#undoToast');
+  const open = Boolean(toast && !toast.hidden);
+  root.classList.toggle('undo-toast-open', open);
+  if (!open) {
+    root.style.setProperty('--undo-toast-height', '0px');
+    return;
+  }
+  root.style.setProperty('--undo-toast-height', `${Math.ceil(toast.getBoundingClientRect().height)}px`);
+  if (!window.matchMedia('(max-width: 1023px)').matches) return;
+  window.requestAnimationFrame(() => {
+    if (toast.hidden) return;
+    const pager = document.querySelector('[data-editor-section]:not([hidden]) .section-pager');
+    if (!pager) return;
+    const toastBox = toast.getBoundingClientRect();
+    const pagerBox = pager.getBoundingClientRect();
+    const gap = 12;
+    if (pagerBox.bottom <= toastBox.top - gap || pagerBox.top >= toastBox.bottom) return;
+    window.scrollBy(0, pagerBox.bottom - toastBox.top + gap);
+  });
 }
 
 function dismissUndoToast({ restoreFocus = false } = {}) {
@@ -890,6 +929,7 @@ function dismissUndoToast({ restoreFocus = false } = {}) {
   const returnFocus = restoreFocus && toast.contains(document.activeElement);
   toast.inert = true;
   toast.hidden = true;
+  syncUndoToastSpace();
   if (returnFocus) {
     const focusTarget = document.querySelector('#appShell').inert ? '#continueButton' : '#brandHome';
     document.querySelector(focusTarget).focus();
@@ -907,6 +947,7 @@ function showActionToast(message) {
   const text = document.querySelector('#actionToastMessage');
   if (!toast || !text) return;
   text.textContent = message;
+  updateStickyOffsets();
   toast.hidden = false;
   toast.inert = false;
   clearTimeout(actionToastTimer);
@@ -952,7 +993,7 @@ function undoEntryRemoval() {
   if (toggle) toggle.focus();
 }
 
-function shouldRemindBackup(state, now) {
+function shouldRemindBackup(state, now, options) {
   const source = state && typeof state === 'object' ? state : {};
   const asNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
   const editsSinceBackup = asNumber(source.editsSinceBackup);
@@ -962,7 +1003,9 @@ function shouldRemindBackup(state, now) {
   const weekMs = 7 * 24 * 60 * 60 * 1000;
   const noBackupYet = lastBackupAt <= 0;
   const backupIsOld = lastBackupAt > 0 && currentTime - lastBackupAt > weekMs;
-  return editsSinceBackup >= 20 && (noBackupYet || backupIsOld) && currentTime >= snoozeUntil;
+  const extras = options && typeof options === 'object' ? options : {};
+  const exportMoment = extras.afterPdfExport === true && noBackupYet;
+  return (editsSinceBackup >= 50 || exportMoment) && (noBackupYet || backupIsOld) && currentTime >= snoozeUntil;
 }
 
 function downloadBackup() {
@@ -972,6 +1015,7 @@ function downloadBackup() {
   );
   backupReminder.lastBackupAt = Date.now();
   backupReminder.editsSinceBackup = 0;
+  pdfExportNeedsBackupReminder = false;
   writeBackupReminder(backupReminder);
   updateBackupReminderNotice();
 }
@@ -1184,7 +1228,7 @@ function clearAllData() {
     persistenceResult = 'unknown';
     persistenceRequestStarted = false;
     backupReminder = { lastBackupAt: 0, editsSinceBackup: 0, snoozeUntil: 0 };
-    backupReminderDismissed = false;
+    pdfExportNeedsBackupReminder = false;
     try {
       localStorage.removeItem(BACKUP_REMINDER_KEY);
     } catch (error) {
@@ -1525,13 +1569,13 @@ function labelEntryControls(entry, type, index, count, item) {
   toggle.title = toggleLabel;
   const up = entry.querySelector('[data-move="up"]');
   const down = entry.querySelector('[data-move="down"]');
-  const upLabel = `Move ${type} entry ${index + 1} up`;
-  const downLabel = `Move ${type} entry ${index + 1} down`;
+  const upLabel = 'Move up';
+  const downLabel = 'Move down';
   up.setAttribute('aria-label', upLabel);
-  up.title = upLabel;
+  up.title = `Move ${type} entry ${index + 1} up`;
   up.disabled = index === 0;
   down.setAttribute('aria-label', downLabel);
-  down.title = downLabel;
+  down.title = `Move ${type} entry ${index + 1} down`;
   down.disabled = index === count - 1;
   const removeButton = entry.querySelector('.remove-item');
   const removeLabel = `Remove ${type} entry ${index + 1}`;
@@ -1757,6 +1801,16 @@ function updateVersionBanner() {
     keep.textContent = 'master CV';
     text.append(keep);
   }
+  syncVersionBannerTailor();
+  updateStickyOffsets();
+}
+
+function syncVersionBannerTailor() {
+  const button = document.querySelector('#versionBannerTailor');
+  if (!button) return;
+  const show = Boolean(activeVersion()) && !tailorMode;
+  button.hidden = !show;
+  button.inert = !show;
 }
 
 function syncTailorChrome() {
@@ -1793,6 +1847,8 @@ function syncTailorChrome() {
   if (title && version) title.textContent = `Tailoring: ${version.name}`;
   const shell = document.querySelector('#appShell');
   if (shell) shell.dataset.tailor = active ? 'true' : 'false';
+  syncVersionBannerTailor();
+  updateStickyOffsets();
 }
 
 function enterTailorMode() {
@@ -2452,6 +2508,10 @@ function updateLaunchScreen() {
     : hasDraft
       ? 'Saved locally'
       : 'No saved draft yet';
+  const continueButton = document.querySelector('#continueButton');
+  const newCvButton = document.querySelector('#newCvButton');
+  if (continueButton) continueButton.classList.toggle('launch-card-primary', hasDraft);
+  if (newCvButton) newCvButton.classList.toggle('launch-card-primary', !hasDraft);
 }
 
 function startNewCv({ confirmReplacement = true } = {}) {
@@ -2511,6 +2571,7 @@ function syncExportPanel({ focus = false } = {}) {
   panel.inert = !show;
   button.setAttribute('aria-expanded', String(!phoneLayout() && exportPopoverOpen));
   if (show && focus) panel.focus({ preventScroll: true });
+  updateBackupReminderNotice();
 }
 function closeExportPopover({ returnFocus = false } = {}) {
   const wasPhoneExport = phoneLayout() && document.querySelector('#appShell').dataset.mobileView === 'export';
@@ -2948,13 +3009,10 @@ document.querySelector('#backupReminderDownload').addEventListener('click', () =
   hideBackupReminder();
 });
 document.querySelector('#backupReminderLater').addEventListener('click', () => {
-  backupReminderDismissed = true;
-  hideBackupReminder();
+  snoozeBackupReminder(BACKUP_REMINDER_LATER_MS);
 });
 document.querySelector('#backupReminderSnooze').addEventListener('click', () => {
-  backupReminder.snoozeUntil = Date.now() + BACKUP_REMINDER_WEEK_MS;
-  writeBackupReminder(backupReminder);
-  hideBackupReminder();
+  snoozeBackupReminder(BACKUP_REMINDER_WEEK_MS);
 });
 
 renderFields();
@@ -3124,6 +3182,20 @@ function updateStickyOffsets() {
   const navIsSticky = sectionNav && getComputedStyle(sectionNav).position === 'sticky';
   const navHeight = navIsSticky ? sectionNav.getBoundingClientRect().height : 0;
   root.style.setProperty('--section-nav-offset', `${navHeight}px`);
+  const topbarBottom = topbar.getBoundingClientRect().bottom;
+  const chromeBelowTopbar = (element) => {
+    if (!element || element.hidden || element.closest('[hidden]')) return 0;
+    const box = element.getBoundingClientRect();
+    if (box.height <= 0) return 0;
+    const margin = Number.parseFloat(getComputedStyle(element).marginBottom) || 0;
+    return Math.max(0, box.bottom + margin - topbarBottom);
+  };
+  let bannerHeight = chromeBelowTopbar(document.querySelector('#versionBanner'));
+  const tailorPanel = document.querySelector('#tailorPanel');
+  if (tailorPanel && !tailorPanel.hidden) {
+    bannerHeight = Math.max(bannerHeight, chromeBelowTopbar(tailorPanel.querySelector('.tailor-bar')));
+  }
+  root.style.setProperty('--banner-height', `${Math.ceil(bannerHeight)}px`);
 }
 
 updateStickyOffsets();
@@ -3132,6 +3204,8 @@ if (typeof ResizeObserver === 'function') {
   stickyOffsetObserver.observe(document.querySelector('#noticeStack'));
   stickyOffsetObserver.observe(document.querySelector('.topbar'));
   stickyOffsetObserver.observe(document.querySelector('.section-nav'));
+  stickyOffsetObserver.observe(document.querySelector('#versionBanner'));
+  stickyOffsetObserver.observe(document.querySelector('#tailorPanel'));
 } else {
   window.addEventListener('resize', updateStickyOffsets);
 }
