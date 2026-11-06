@@ -61,6 +61,9 @@ let backupReminder = readBackupReminder();
 let backupReminderDismissed = false;
 let pendingVersionRemoval = null;
 let undoToastTimer = null;
+let actionToastTimer = null;
+let tailorMode = false;
+let versionSheetOpen = false;
 const entryExpanded = { experience: [], education: [] };
 
 try {
@@ -899,6 +902,21 @@ function hideUndoToast() {
   dismissUndoToast({ restoreFocus: true });
 }
 
+function showActionToast(message) {
+  const toast = document.querySelector('#actionToast');
+  const text = document.querySelector('#actionToastMessage');
+  if (!toast || !text) return;
+  text.textContent = message;
+  toast.hidden = false;
+  toast.inert = false;
+  clearTimeout(actionToastTimer);
+  actionToastTimer = setTimeout(() => {
+    actionToastTimer = null;
+    toast.inert = true;
+    toast.hidden = true;
+  }, 2500);
+}
+
 function undoEntryRemoval() {
   const pending = pendingEntryRemoval;
   const items = pending && resumeData[pending.list];
@@ -1654,11 +1672,149 @@ function currentExportData() {
   return applyVersion(resumeData, activeVersion());
 }
 
-function focusVersionSelect() {
-  const menu = document.querySelector('.more-menu');
-  if (menu && !menu.open) menu.open = true;
-  const select = document.querySelector('#versionSelect');
-  if (select) select.focus();
+function versionDisplayName() {
+  const version = activeVersion();
+  return version ? version.name : 'Master CV';
+}
+
+function focusCheckedVersionRadio() {
+  const sheet = document.querySelector('#versionSheet');
+  if (!sheet || sheet.hidden) return;
+  const checked = sheet.querySelector('input[type="radio"]:checked');
+  if (checked) checked.focus();
+  else sheet.focus();
+}
+
+function syncVersionSheet({ focus = false } = {}) {
+  const sheet = document.querySelector('#versionSheet');
+  const backdrop = document.querySelector('#versionSheetBackdrop');
+  const pill = document.querySelector('#versionPill');
+  if (!sheet || !pill) return;
+  const phone = phoneLayout();
+  pill.setAttribute('aria-expanded', versionSheetOpen ? 'true' : 'false');
+  sheet.setAttribute('aria-modal', versionSheetOpen && phone ? 'true' : 'false');
+  sheet.hidden = !versionSheetOpen;
+  sheet.inert = !versionSheetOpen;
+  if (backdrop) {
+    const showBackdrop = versionSheetOpen && phone;
+    backdrop.hidden = !showBackdrop;
+    backdrop.inert = !showBackdrop;
+  }
+  const topbar = document.querySelector('.topbar');
+  if (topbar) topbar.classList.toggle('version-sheet-host', versionSheetOpen && phone);
+  if (versionSheetOpen && focus) focusCheckedVersionRadio();
+}
+
+function openVersionSheet({ focus = true } = {}) {
+  closeMoreMenu();
+  if (exportPopoverOpen || (phoneLayout() && document.querySelector('#appShell').dataset.mobileView === 'export')) {
+    closeExportPopover();
+  }
+  versionSheetOpen = true;
+  syncVersionSheet({ focus });
+}
+
+function closeVersionSheet({ returnFocus = false } = {}) {
+  const sheet = document.querySelector('#versionSheet');
+  const focusWasInside = Boolean(sheet && sheet.contains(document.activeElement));
+  if (!versionSheetOpen && !(sheet && !sheet.hidden)) return;
+  versionSheetOpen = false;
+  syncVersionSheet();
+  if (returnFocus || focusWasInside) {
+    const pill = document.querySelector('#versionPill');
+    if (pill) pill.focus();
+  }
+}
+
+function sheetFocusable(sheet) {
+  const elements = [...sheet.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((element) => !element.hidden && !element.closest('[hidden], [inert]') && element.getClientRects().length);
+  return elements.filter((element) => {
+    if (element.type !== 'radio') return true;
+    const group = elements.filter((item) => item.type === 'radio' && item.name === element.name);
+    const checked = group.find((radio) => radio.checked) || group[0];
+    return element === checked;
+  });
+}
+
+function updateVersionPill() {
+  const label = document.querySelector('#versionPillLabel');
+  if (label) label.textContent = versionDisplayName();
+}
+
+function updateVersionBanner() {
+  const banner = document.querySelector('#versionBanner');
+  const text = document.querySelector('#versionBannerText');
+  const version = activeVersion();
+  if (!banner) return;
+  banner.hidden = !version;
+  banner.inert = !version;
+  if (text && version) {
+    text.replaceChildren();
+    text.append(document.createTextNode(`Viewing ${version.name} · Edits change your `));
+    const keep = document.createElement('span');
+    keep.className = 'version-banner-keep';
+    keep.textContent = 'master CV';
+    text.append(keep);
+  }
+}
+
+function syncTailorChrome() {
+  if (tailorMode && !activeVersion()) tailorMode = false;
+  const active = tailorMode;
+  const panel = document.querySelector('#tailorPanel');
+  const form = document.querySelector('#resumeForm');
+  const heading = document.querySelector('.panel-heading');
+  const quick = document.querySelector('.quick-actions');
+  const sectionNav = document.querySelector('.section-nav');
+  const phone = phoneLayout();
+  if (panel) {
+    panel.hidden = !active;
+    panel.inert = !active;
+  }
+  if (form) {
+    form.hidden = active;
+    form.inert = active;
+  }
+  if (heading) {
+    heading.hidden = active;
+    heading.inert = active;
+  }
+  if (quick) {
+    quick.hidden = active;
+    quick.inert = active;
+  }
+  if (sectionNav) {
+    sectionNav.hidden = active && phone;
+    sectionNav.inert = active && phone;
+  }
+  const title = document.querySelector('#tailorHeading');
+  const version = activeVersion();
+  if (title && version) title.textContent = `Tailoring: ${version.name}`;
+  const shell = document.querySelector('#appShell');
+  if (shell) shell.dataset.tailor = active ? 'true' : 'false';
+}
+
+function enterTailorMode() {
+  if (!activeVersion()) return;
+  tailorMode = true;
+  versionSheetOpen = false;
+  syncVersionSheet();
+  syncTailorChrome();
+  const heading = document.querySelector('#tailorHeading');
+  if (heading) heading.focus({ preventScroll: true });
+}
+
+function leaveTailorMode({ focusHeading = false } = {}) {
+  if (!tailorMode) {
+    syncTailorChrome();
+    return;
+  }
+  tailorMode = false;
+  syncTailorChrome();
+  if (!focusHeading) return;
+  const section = document.querySelector('[data-editor-section]:not([hidden]) h2');
+  if (section) section.focus({ preventScroll: true });
 }
 
 function closeVersionRename(returnFocus) {
@@ -1825,45 +1981,60 @@ function syncVersionCopyFields() {
   if (count) count.textContent = `${summaryLength} / 500`;
 }
 
+function renderVersionRadios() {
+  const list = document.querySelector('#versionRadioList');
+  if (!list) return;
+  list.replaceChildren();
+  const addRadio = (id, name) => {
+    const label = document.createElement('label');
+    label.className = 'version-choice';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'activeVersion';
+    input.value = id;
+    input.checked = id ? activeVersionId === id : !activeVersion();
+    input.addEventListener('change', () => {
+      if (input.checked) onVersionSelected(id);
+    });
+    const text = document.createElement('span');
+    text.textContent = name;
+    label.append(input, text);
+    list.append(label);
+  };
+  addRadio('', 'Master CV');
+  (Array.isArray(cvVersions) ? cvVersions : []).forEach((item) => {
+    if (!item || typeof item.id !== 'string') return;
+    addRadio(item.id, item.name);
+  });
+}
+
 function renderVersionControls() {
-  const select = document.querySelector('#versionSelect');
-  if (!select) return;
+  const list = document.querySelector('#versionRadioList');
+  if (!list) return;
   if (activeVersionId && !activeVersion()) activeVersionId = null;
   const current = activeVersion();
-  select.replaceChildren();
-  const masterOption = document.createElement('option');
-  masterOption.value = '';
-  masterOption.textContent = 'Master CV';
-  select.append(masterOption);
-  (Array.isArray(cvVersions) ? cvVersions : []).forEach((item) => {
-    const option = document.createElement('option');
-    option.value = item.id;
-    option.textContent = item.name;
-    select.append(option);
-  });
-  select.value = current ? current.id : '';
+  renderVersionRadios();
   const managing = Boolean(current);
   const renameButton = document.querySelector('#renameVersionButton');
   const duplicateButton = document.querySelector('#duplicateVersionButton');
   const deleteButton = document.querySelector('#deleteVersionButton');
+  const tailorButton = document.querySelector('#tailorFromSheetButton');
   if (renameButton) renameButton.disabled = !managing;
   if (duplicateButton) duplicateButton.disabled = !managing;
   if (deleteButton) deleteButton.disabled = !managing;
-  const hint = document.querySelector('#versionEditHint');
-  if (hint) {
-    hint.hidden = !managing;
-    hint.inert = !managing;
-  }
-  const entries = document.querySelector('#versionEntries');
-  if (entries) {
-    entries.hidden = !managing;
-    entries.inert = !managing;
+  if (tailorButton) {
+    tailorButton.hidden = !managing;
+    tailorButton.inert = !managing;
   }
   if (!managing) closeVersionRename(false);
   renderVersionEntries();
   renderVersionSkills();
   syncVersionCopyFields();
   showExportFilename();
+  updateVersionPill();
+  updateVersionBanner();
+  updateFormatLabel();
+  syncTailorChrome();
 }
 
 function masterExportBase() {
@@ -1903,8 +2074,9 @@ function createNewVersion() {
   closeVersionRename(false);
   renderVersionControls();
   updatePreview();
-  scheduleSave('Version created');
-  focusVersionSelect();
+  scheduleSave();
+  showActionToast('Version created');
+  focusCheckedVersionRadio();
 }
 
 function openVersionRename() {
@@ -1928,8 +2100,9 @@ function saveVersionName() {
   closeVersionRename(false);
   renderVersionControls();
   updatePreview();
-  scheduleSave('Version renamed');
-  focusVersionSelect();
+  scheduleSave();
+  showActionToast('Version renamed');
+  focusCheckedVersionRadio();
 }
 
 function duplicateActiveVersion() {
@@ -1945,8 +2118,9 @@ function duplicateActiveVersion() {
   closeVersionRename(false);
   renderVersionControls();
   updatePreview();
-  scheduleSave('Version duplicated');
-  focusVersionSelect();
+  scheduleSave();
+  showActionToast('Version duplicated');
+  focusCheckedVersionRadio();
 }
 
 function deleteActiveVersion() {
@@ -1957,12 +2131,13 @@ function deleteActiveVersion() {
   pendingVersionRemoval = { version: structuredClone(version), index };
   cvVersions.splice(index, 1);
   activeVersionId = null;
+  tailorMode = false;
   closeVersionRename(false);
   renderVersionControls();
   updatePreview();
   scheduleSave();
   showUndoToast('version');
-  focusVersionSelect();
+  focusCheckedVersionRadio();
 }
 
 function undoVersionRemoval() {
@@ -1979,17 +2154,20 @@ function undoVersionRemoval() {
   activeVersionId = pending.version.id;
   renderVersionControls();
   updatePreview();
-  scheduleSave('Version restored');
-  focusVersionSelect();
+  scheduleSave();
+  showActionToast('Version restored');
+  if (!versionSheetOpen) openVersionSheet({ focus: false });
+  focusCheckedVersionRadio();
 }
 
-function onVersionSelected() {
-  const select = document.querySelector('#versionSelect');
-  const value = select ? select.value : '';
-  activeVersionId = value && cvVersions.some((version) => version.id === value) ? value : null;
+function onVersionSelected(value) {
+  const nextId = value && cvVersions.some((version) => version.id === value) ? value : null;
+  activeVersionId = nextId;
   closeVersionRename(false);
+  if (!nextId) tailorMode = false;
   renderVersionControls();
   updatePreview();
+  if (versionSheetOpen) focusCheckedVersionRadio();
 }
 
 function updateWorkspaceName() {
@@ -2347,6 +2525,8 @@ function closeExportPopover({ returnFocus = false } = {}) {
   syncExportPanel();
 }
 function setMobileView(view) {
+  if ((view === 'preview' || view === 'export') && versionSheetOpen) closeVersionSheet();
+  if (view === 'edit' && tailorMode) leaveTailorMode();
   const appShell = document.querySelector('#appShell');
   const currentView = appShell.dataset.mobileView || 'edit';
   const leavingEdit = (view === 'preview' || view === 'export') && currentView === 'edit';
@@ -2375,7 +2555,10 @@ document.querySelector('#printButton').addEventListener('click', () => {
     return;
   }
   exportPopoverOpen = !exportPopoverOpen;
-  if (exportPopoverOpen) closeMoreMenu();
+  if (exportPopoverOpen) {
+    closeMoreMenu();
+    closeVersionSheet();
+  }
   if (!exportPopoverOpen && document.querySelector('#exportPanel').contains(document.activeElement)) {
     document.querySelector('#printButton').focus();
   }
@@ -2402,13 +2585,18 @@ window.matchMedia('(min-width: 1024px)').addEventListener('change', (event) => {
     document.querySelector('#appShell').dataset.mobileView = 'edit';
   }
   syncExportPanel();
+  syncVersionSheet();
+  syncTailorChrome();
 });
 document.querySelector('#sectionNavToggle').addEventListener('click', () => {
   const expanded = document.querySelector('#sectionNavToggle').getAttribute('aria-expanded') === 'true';
   setSectionNavCollapsed(expanded);
 });
 document.querySelectorAll('[data-section-target]').forEach((button) => {
-  button.addEventListener('click', () => showEditorSection(button.dataset.sectionTarget, { focusHeading: true }));
+  button.addEventListener('click', () => {
+    if (tailorMode) leaveTailorMode();
+    showEditorSection(button.dataset.sectionTarget, { focusHeading: true });
+  });
 });
 document.querySelectorAll('[data-section-back]').forEach((button) => {
   button.addEventListener('click', () => {
@@ -2453,11 +2641,42 @@ document.addEventListener('pointerdown', (event) => {
     exportPopoverOpen = false;
     syncExportPanel();
   }
+  const versionAnchor = document.querySelector('#versionPillSlot');
+  if (versionSheetOpen && !phoneLayout() && versionAnchor && !versionAnchor.contains(event.target)) closeVersionSheet();
+});
+document.addEventListener('keydown', (event) => {
+  if (!versionSheetOpen) return;
+  const sheet = document.querySelector('#versionSheet');
+  if (!sheet) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeVersionSheet({ returnFocus: true });
+    return;
+  }
+  if (event.key !== 'Tab' || !phoneLayout()) return;
+  const focusable = sheetFocusable(sheet);
+  if (!focusable.length) {
+    event.preventDefault();
+    sheet.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || !sheet.contains(document.activeElement))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || !sheet.contains(document.activeElement))) {
+    event.preventDefault();
+    first.focus();
+  }
 });
 moreMenu.addEventListener('toggle', () => {
-  if (!moreMenu.open || !exportPopoverOpen) return;
-  exportPopoverOpen = false;
-  syncExportPanel();
+  if (!moreMenu.open) return;
+  if (exportPopoverOpen) {
+    exportPopoverOpen = false;
+    syncExportPanel();
+  }
+  if (versionSheetOpen) closeVersionSheet();
 });
 moreMenu.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
@@ -2465,18 +2684,22 @@ moreMenu.addEventListener('keydown', (event) => {
     closeMoreMenu({ returnFocus: true });
   }
 });
-moreMenu.querySelectorAll('button, select, input').forEach((control) => {
-  if (control.closest('#versionsPanel') || control.type === 'radio') return;
-  control.addEventListener('change', () => closeMoreMenu());
-  control.addEventListener('click', () => {
-    if (control.tagName === 'BUTTON') closeMoreMenu({ returnFocus: true });
-  });
+moreMenu.querySelectorAll('button').forEach((control) => {
+  control.addEventListener('click', () => closeMoreMenu({ returnFocus: true }));
 });
+function updateFormatLabel() {
+  const label = document.querySelector('#formatLabel');
+  if (!label) return;
+  const sizeLabel = document.documentElement.classList.contains('page-a4') ? 'A4' : 'Letter';
+  const suffix = `${sizeLabel} / selectable text`;
+  const version = activeVersion();
+  label.textContent = version ? `${version.name} · ${suffix}` : suffix;
+}
 function updatePrintPageSize(size = selectedChoice('paperSize', 'letter')) {
   const normalizedSize = size === 'a4' ? 'a4' : 'letter';
   document.documentElement.classList.toggle('page-a4', normalizedSize === 'a4');
   document.documentElement.classList.toggle('page-letter', normalizedSize === 'letter');
-  document.querySelector('#formatLabel').textContent = `${normalizedSize === 'a4' ? 'A4' : 'Letter'} / selectable text`;
+  updateFormatLabel();
 }
 function applyPreviewTextSize(size = selectedChoice('textSize', 'standard')) {
   const preview = document.querySelector('#resumePreview');
@@ -2582,7 +2805,14 @@ document.querySelector('#versionSummary').addEventListener('input', (event) => {
 document.querySelector('#exportButton').addEventListener('click', downloadBackup);
 document.querySelector('#copyPlainTextButton').addEventListener('click', copyPlainText);
 document.querySelector('#downloadPlainTextButton').addEventListener('click', () => downloadPlainText(currentExportData()));
-document.querySelector('#versionSelect').addEventListener('change', onVersionSelected);
+document.querySelector('#versionPill').addEventListener('click', () => {
+  if (versionSheetOpen) closeVersionSheet({ returnFocus: true });
+  else openVersionSheet();
+});
+document.querySelector('#versionSheetBackdrop').addEventListener('click', () => closeVersionSheet({ returnFocus: true }));
+document.querySelector('#versionBannerTailor').addEventListener('click', enterTailorMode);
+document.querySelector('#tailorFromSheetButton').addEventListener('click', enterTailorMode);
+document.querySelector('#tailorDoneButton').addEventListener('click', () => leaveTailorMode({ focusHeading: true }));
 document.querySelector('#newVersionButton').addEventListener('click', createNewVersion);
 document.querySelector('#renameVersionButton').addEventListener('click', openVersionRename);
 document.querySelector('#duplicateVersionButton').addEventListener('click', duplicateActiveVersion);

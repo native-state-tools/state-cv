@@ -964,6 +964,14 @@ test('WCAG contrast for text, controls, focus, links, placeholders, and notices 
     const selected = document.querySelector('.segmented-option input:checked');
     add('selected segment text', getComputedStyle(selected.nextElementSibling).color, getComputedStyle(selected).backgroundColor);
     add('brand link', color('.brand'), topbar);
+    const versionPill = document.querySelector('#versionPill');
+    const versionPillStyle = getComputedStyle(versionPill);
+    add('version pill text', versionPillStyle.color, topbar);
+    add('version pill border', versionPillStyle.borderTopColor, topbar, 3);
+    const versionBanner = document.querySelector('#versionBanner');
+    const versionBannerStyle = getComputedStyle(versionBanner);
+    add('version banner text', getComputedStyle(versionBanner.querySelector('p')).color, versionBannerStyle.backgroundColor);
+    add('version banner border', versionBannerStyle.borderTopColor, versionBannerStyle.backgroundColor, 3);
     add('field placeholder', color('.field input', '::placeholder'), composite(getComputedStyle(document.querySelector('.field input')).backgroundColor, paper));
     const field = document.querySelector('.field input');
     const fieldBackground = composite(getComputedStyle(field).backgroundColor, paper);
@@ -1907,8 +1915,28 @@ test('Landing page opens from file://', async ({ page }, testInfo) => {
 async function openVersions(page) {
   const edit = page.getByRole('button', { name: 'Edit', exact: true });
   if (await edit.isVisible() && await edit.getAttribute('aria-pressed') !== 'true') await edit.click();
-  await openMenu(page);
-  await expect(page.getByLabel('Version', { exact: true })).toBeVisible();
+  const sheet = page.locator('#versionSheet');
+  if (!(await sheet.isVisible())) await page.locator('#versionPill').click();
+  await expect(sheet).toBeVisible();
+  await expect(page.getByRole('radio', { name: 'Master CV', exact: true })).toBeVisible();
+}
+
+async function chooseVersion(page, name) {
+  await openVersions(page);
+  const radio = page.getByRole('radio', { name, exact: true });
+  await radio.click();
+  await expect(radio).toBeChecked();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#versionSheet')).toBeHidden();
+}
+
+async function openTailor(page) {
+  const done = page.locator('#tailorDoneButton');
+  if (await done.isVisible()) return;
+  const fromSheet = page.locator('#tailorFromSheetButton');
+  if (await fromSheet.isVisible()) await fromSheet.click();
+  else await page.locator('#versionBannerTailor').click();
+  await expect(done).toBeVisible();
 }
 
 async function expectVersionPreview(page, { present, absent } = {}) {
@@ -1938,11 +1966,13 @@ test('versions hide one experience entry in preview and plain text, then survive
   await expect(page.getByRole('button', { name: 'Duplicate', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'New version', exact: true }).click();
-  await expect(page.locator('#versionSelect option:checked')).toHaveText('Untitled version');
-  await expect(page.locator('#versionEditHint')).toHaveText('Edits change your master CV.');
+  await expect(page.getByRole('radio', { name: 'Untitled version', exact: true })).toBeChecked();
+  await expect(page.locator('#versionBanner')).toContainText('Viewing Untitled version');
+  await expect(page.locator('#versionBanner')).toContainText('Edits change your master CV');
   await expect(page.locator('#exportFilename')).toHaveValue('Alex Morgan CV - Untitled version');
-  await expect(page.getByLabel('Version', { exact: true })).toBeFocused();
+  await expect(page.getByRole('radio', { name: 'Untitled version', exact: true })).toBeFocused();
 
+  await openTailor(page);
   const hiddenBox = page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' });
   await expect(hiddenBox).toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Visible Role, Visible Co' })).toBeChecked();
@@ -1965,14 +1995,13 @@ test('versions hide one experience entry in preview and plain text, then survive
   expect(content).toContain('Visible Role');
   expect(content).not.toContain('Hidden Role');
 
-  await openVersions(page);
-  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Master CV' });
+  await chooseVersion(page, 'Master CV');
   await expectVersionPreview(page, { present: 'Hidden Role' });
 
   await page.reload();
   await enterEditor(page);
-  await openVersions(page);
-  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Untitled version' });
+  await chooseVersion(page, 'Untitled version');
+  await openTailor(page);
   await expect(page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' })).not.toBeChecked();
   await expectVersionPreview(page, { present: 'Visible Role', absent: 'Hidden Role' });
 
@@ -1980,15 +2009,15 @@ test('versions hide one experience entry in preview and plain text, then survive
   await page.getByRole('button', { name: 'Rename', exact: true }).click();
   await page.getByLabel('Version name').fill('Acme role');
   await page.getByRole('button', { name: 'Save name', exact: true }).click();
-  await expect(page.locator('#versionSelect option:checked')).toHaveText('Acme role');
+  await expect(page.getByRole('radio', { name: 'Acme role', exact: true })).toBeChecked();
   await page.getByRole('button', { name: 'Duplicate', exact: true }).click();
-  await expect(page.locator('#versionSelect option:checked')).toHaveText('Acme role copy');
+  await expect(page.getByRole('radio', { name: 'Acme role copy', exact: true })).toBeChecked();
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(page.locator('#undoToast')).toContainText('Version removed');
-  await expect(page.locator('#versionSelect option:checked')).toHaveText('Master CV');
+  await expect(page.getByRole('radio', { name: 'Master CV', exact: true })).toBeChecked();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(page.locator('#versionSelect option:checked')).toHaveText('Acme role copy');
-  await expect(page.getByLabel('Version', { exact: true })).toBeFocused();
+  await expect(page.getByRole('radio', { name: 'Acme role copy', exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: 'Acme role copy', exact: true })).toBeFocused();
   await expect.poll(() => page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem('state-cv-data-v1') || '{}');
     return (data.versions || []).map((version) => version.name).join('|');
@@ -2019,6 +2048,7 @@ test('versions hide one bullet and one skill, override title and summary, and ke
   await openVersions(page);
   await page.getByRole('button', { name: 'New version', exact: true }).click();
   await expect(page.locator('#exportFilename')).toHaveValue('Alex Morgan CV - Untitled version');
+  await openTailor(page);
   const block = page.locator('.version-entry-block', { has: page.getByRole('checkbox', { name: 'Visible Role, Visible Co' }) });
   await block.locator('summary').click();
   await block.getByRole('checkbox', { name: 'HiddenBulletLine', exact: true }).uncheck();
@@ -2057,8 +2087,7 @@ test('versions hide one bullet and one skill, override title and summary, and ke
     const version = data.versions && data.versions[0];
     return version && version.exportName === 'Acme file' && data.master.exportName === '';
   })).toBe(true);
-  await openMenu(page);
-  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Master CV' });
+  await chooseVersion(page, 'Master CV');
   await expect(page.locator('#exportFilename')).toHaveValue('Alex Morgan CV');
   await expectVersionPreview(page, { present: 'HiddenBulletLine' });
   await expect(page.locator('#resumePreview')).toContainText('Master Title');
@@ -2066,17 +2095,17 @@ test('versions hide one bullet and one skill, override title and summary, and ke
   await expect(page.locator('#resumePreview')).toContainText('Master summary text');
   await expect(page.locator('#resumePreview')).not.toContainText('Version Title');
 
-  await openVersions(page);
-  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Untitled version' });
+  await chooseVersion(page, 'Untitled version');
   await expect(page.locator('#exportFilename')).toHaveValue('Acme file');
+  await openTailor(page);
   await page.locator('#versionCopy summary').click();
   await expect(page.getByLabel('Title for this version')).toHaveValue('Version Title');
 
   await page.reload();
   await enterEditor(page);
-  await openVersions(page);
-  await page.getByLabel('Version', { exact: true }).selectOption({ label: 'Untitled version' });
+  await chooseVersion(page, 'Untitled version');
   await expect(page.locator('#exportFilename')).toHaveValue('Acme file');
+  await openTailor(page);
   await page.locator('#versionCopy summary').click();
   await expect(page.getByLabel('Title for this version')).toHaveValue('Version Title');
   await expect(page.getByLabel('Summary for this version')).toHaveValue('Version summary text');
@@ -2103,11 +2132,12 @@ test('versions keep a deleted entry and its hidden bullet until undo', async ({ 
 
   await openVersions(page);
   await page.getByRole('button', { name: 'New version', exact: true }).click();
+  await openTailor(page);
   await page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' }).uncheck();
   const kept = page.locator('.version-entry-block', { has: page.getByRole('checkbox', { name: 'Kept Role, Kept Co' }) });
   await kept.locator('summary').click();
   await kept.getByRole('checkbox', { name: 'SecretBullet', exact: true }).uncheck();
-  await page.keyboard.press('Escape');
+  await page.locator('#tailorDoneButton').click();
 
   await openSection(page, 'Experience');
   await page.getByRole('button', { name: 'Remove experience entry 2' }).click();
@@ -2118,9 +2148,9 @@ test('versions keep a deleted entry and its hidden bullet until undo', async ({ 
     return Boolean(version && version.hiddenEntries.some((id) => !ids.includes(id)) && ids.length === 1);
   })).toBe(true);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await openVersions(page);
+  await openTailor(page);
   await expect(page.getByRole('checkbox', { name: 'Hidden Role, Hidden Co' })).not.toBeChecked();
-  await page.keyboard.press('Escape');
+  await page.locator('#tailorDoneButton').click();
 
   await openSection(page, 'Experience');
   await page.getByRole('button', { name: 'Remove experience entry 1' }).click();
@@ -2133,7 +2163,7 @@ test('versions keep a deleted entry and its hidden bullet until undo', async ({ 
     return Boolean(keptId && hidden[keptId].includes('SecretBullet'));
   })).toBe(true);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await openVersions(page);
+  await openTailor(page);
   const keptAgain = page.locator('.version-entry-block', { has: page.getByRole('checkbox', { name: 'Kept Role, Kept Co' }) });
   await keptAgain.locator('summary').click();
   await expect(keptAgain.getByRole('checkbox', { name: 'SecretBullet', exact: true })).not.toBeChecked();
@@ -2159,4 +2189,63 @@ test('versions are named when PDF import replaces the CV', async ({ page }) => {
   await expect.poll(() => message).toContain('Your 1 version will be removed.');
   expect(message).toContain('A copy is kept in Your data > Recent snapshots.');
   await expect(page.getByLabel('Full name')).toHaveValue('Alex Morgan');
+});
+
+test('version pill, Viewing banner, and Tailor stay out of Menu', async ({ page }) => {
+  await openApp(page);
+  await enterEditor(page);
+  await expect(page.locator('#versionPill')).toContainText('Master CV');
+  await expect(page.locator('#versionBanner')).toBeHidden();
+  await expect(page.locator('#formatLabel')).toHaveText('Letter / selectable text');
+  await openMenu(page);
+  const menuLabels = await page.locator('#moreMenuContent > button, #moreMenuContent > a').evaluateAll((elements) =>
+    elements.map((element) => element.textContent.replace(/\s+/g, ' ').trim())
+  );
+  expect(menuLabels.some((label) => /version/i.test(label))).toBe(false);
+  expect(menuLabels.at(-1)).toMatch(/Start new CV/);
+  await expect(page.locator('#moreMenuContent')).not.toContainText('New version');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#moreMenuContent')).toBeHidden();
+
+  await openVersions(page);
+  await expect(page.locator('.more-menu')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#exportPanel')).toBeHidden();
+  if (await page.locator('#mobileExportButton').isVisible()) {
+    await expect(page.getByRole('radio', { name: 'Master CV', exact: true })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByRole('button', { name: 'New version', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('radio', { name: 'Master CV', exact: true })).toBeFocused();
+  }
+  await page.getByRole('button', { name: 'New version', exact: true }).click();
+  await expect(page.locator('#versionPill')).toContainText('Untitled version');
+  await expect(page.locator('#versionBanner')).toContainText('Viewing Untitled version · Edits change your master CV');
+  await expect(page.locator('#saveStatus')).toContainText('Saved locally');
+  await expect(page.locator('#saveStatus')).not.toContainText('Version created');
+  await expect(page.locator('#formatLabel')).toContainText('Untitled version · Letter / selectable text');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#versionSheet')).toBeHidden();
+  await expect(page.locator('#versionPill')).toBeFocused();
+
+  await page.locator('#versionBannerTailor').click();
+  await expect(page.getByRole('heading', { name: 'Tailoring: Untitled version' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Show in this version' })).toBeVisible();
+  await expect(page.locator('#resumeForm')).toBeHidden();
+  if (await page.locator('#previewPanel').isVisible()) await expect(page.locator('#resumePreview')).toBeVisible();
+  await page.locator('#tailorDoneButton').click();
+  await expect(page.locator('#tailorPanel')).toBeHidden();
+  await expect(page.locator('#resumeForm')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Contact details' })).toBeVisible();
+
+  const edit = page.getByRole('button', { name: 'Edit', exact: true });
+  if (await edit.isVisible()) {
+    await page.locator('#versionBannerTailor').click();
+    await expect(page.locator('#tailorPanel')).toBeVisible();
+    await page.locator('[data-mobile-view-button="preview"]').click();
+    await expect(page.locator('#resumePreview')).toBeVisible();
+    await expect(page.locator('#formatLabel')).toContainText('Untitled version');
+    await edit.click();
+    await expect(page.locator('#tailorPanel')).toBeHidden();
+    await expect(page.locator('#resumeForm')).toBeVisible();
+  }
 });
