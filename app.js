@@ -1833,9 +1833,10 @@ function syncTailorChrome() {
     form.hidden = active;
     form.inert = active;
   }
-  if (heading) {
-    heading.hidden = active;
-    heading.inert = active;
+  const pageTitle = heading ? heading.querySelector('h1') : null;
+  if (pageTitle) {
+    pageTitle.hidden = active;
+    pageTitle.inert = active;
   }
   if (quick) {
     quick.hidden = active;
@@ -2245,6 +2246,7 @@ function updateWorkspaceName() {
 
 function updatePreview({ force = false } = {}) {
   updateWorkspaceName();
+  renderAtsTips();
   if (!force && getComputedStyle(document.querySelector('#previewPanel')).display === 'none') return;
   const { basics, summary, experience, education, skills } = currentExportData();
   const preview = document.querySelector('#resumePreview');
@@ -2319,6 +2321,15 @@ const EDITOR_SECTION_LABELS = {
   skills: '05. Skills'
 };
 
+function completionPercent(data) {
+  const values = [data.basics.name, data.basics.title, data.basics.email, data.summary, data.experience.some((item) => item.role || item.company), data.education.some((item) => item.degree || item.school), data.skills];
+  return Math.round((values.filter(Boolean).length / values.length) * 100);
+}
+
+function completionStatusText(percent) {
+  return percent >= 70 ? 'Looking strong' : 'Add your details';
+}
+
 function getSectionStatus(data) {
   const source = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
   const basics = source.basics && typeof source.basics === 'object' && !Array.isArray(source.basics) ? source.basics : {};
@@ -2335,12 +2346,15 @@ function getSectionStatus(data) {
 
 function updateCompletion() {
   const status = getSectionStatus(resumeData);
-  const values = [resumeData.basics.name, resumeData.basics.title, resumeData.basics.email, resumeData.summary, resumeData.experience.some((item) => item.role || item.company), resumeData.education.some((item) => item.degree || item.school), resumeData.skills];
-  const percent = Math.round((values.filter(Boolean).length / values.length) * 100);
-  document.querySelector('#completionPercent').textContent = `${percent}%`;
-  document.querySelector('#completionLabel').textContent = percent === 100 ? 'Ready to send' : percent >= 70 ? 'Looking strong' : 'Add your details';
+  const percent = completionPercent(resumeData);
+  const percentText = `${percent}%`;
+  setTextIfChanged(document.querySelector('#completionPercent'), percentText);
+  setTextIfChanged(document.querySelector('#completionLabel'), completionStatusText(percent));
   const progress = Math.min(100, Math.round(percent / 25) * 25);
-  document.querySelector('#completionRing').className = `completion-ring progress-${progress}`;
+  const ring = document.querySelector('#completionRing');
+  const ringClass = `completion-ring progress-${progress}`;
+  if (ring && ring.className !== ringClass) ring.className = ringClass;
+  setTextIfChanged(document.querySelector('#reviewCompletenessScore'), `${percentText} of the seven counted master CV checks are filled.`);
   updateSectionChecks(status);
   renderAtsTips();
   updatePdfImportCard();
@@ -2410,32 +2424,56 @@ function updatePdfImportCard() {
 }
 
 let atsTipCount = -1;
+function setTextIfChanged(node, text) {
+  if (node && node.textContent !== text) node.textContent = text;
+}
+
+function replaceTipList(list, tips) {
+  if (!list) return;
+  const current = [...list.children].map((item) => item.textContent);
+  if (current.length === tips.length && current.every((text, index) => text === tips[index])) return;
+  list.replaceChildren();
+  tips.forEach((message) => {
+    const item = document.createElement('li');
+    item.textContent = message;
+    list.append(item);
+  });
+}
+
+function renderReviewAts(tips) {
+  const version = activeVersion();
+  const basisText = version
+    ? `These checks match Export for ${version.name}. They follow that version, including hidden entries, hidden bullets, hidden skills, and its title or summary when one is set.`
+    : 'These checks match Export for the master CV.';
+  setTextIfChanged(document.querySelector('#reviewAtsBasis'), basisText);
+  const clear = document.querySelector('#reviewAtsClear');
+  if (clear) clear.hidden = tips.length !== 0;
+  const list = document.querySelector('#reviewAtsList');
+  replaceTipList(list, tips);
+  if (list) list.hidden = tips.length === 0;
+}
+
 function renderAtsTips() {
-  const tips = getAtsTips(resumeData);
+  const tips = getAtsTips(currentExportData());
   const details = document.querySelector('#atsTips');
   const summaryLabel = document.querySelector('#atsTipsSummary');
   const count = document.querySelector('#atsTipsCount');
   const list = document.querySelector('#atsTipsList');
-  if (summaryLabel) summaryLabel.textContent = tips.length ? 'ATS tips' : 'ATS tips: all good';
+  const summaryText = tips.length ? 'ATS tips' : 'ATS tips: all good';
+  setTextIfChanged(summaryLabel, summaryText);
   if (count) {
     count.hidden = tips.length === 0;
-    count.textContent = tips.length ? `(${tips.length})` : '';
+    setTextIfChanged(count, tips.length ? `(${tips.length})` : '');
   }
-  if (list) {
-    list.replaceChildren();
-    tips.forEach((message) => {
-      const item = document.createElement('li');
-      item.textContent = message;
-      list.append(item);
-    });
-    list.hidden = tips.length === 0;
-  }
+  replaceTipList(list, tips);
+  if (list) list.hidden = tips.length === 0;
   if (details) {
     details.classList.toggle('is-clear', tips.length === 0);
     if (!tips.length) details.open = false;
     else if (atsTipCount === 0) details.open = true;
   }
   atsTipCount = tips.length;
+  renderReviewAts(tips);
 }
 
 function setStatus(state, message) {
@@ -2702,7 +2740,29 @@ document.querySelector('#exportPanel').addEventListener('keydown', (event) => {
 });
 document.querySelector('#atsTips').addEventListener('toggle', () => {
   const details = document.querySelector('#atsTips');
-  if (details.open && !getAtsTips(resumeData).length) details.open = false;
+  if (details.open && !getAtsTips(currentExportData()).length) details.open = false;
+});
+function setReviewPanelOpen(open, { returnFocus = false } = {}) {
+  const panel = document.querySelector('#reviewPanel');
+  const chip = document.querySelector('#completionToggle');
+  if (!panel || !chip) return;
+  const focusInside = panel.contains(document.activeElement);
+  if (open) {
+    panel.hidden = false;
+    panel.inert = false;
+  } else {
+    if (returnFocus || focusInside) chip.focus();
+    panel.hidden = true;
+    panel.inert = true;
+  }
+  chip.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+document.querySelector('#completionToggle').addEventListener('click', () => {
+  const open = document.querySelector('#completionToggle').getAttribute('aria-expanded') === 'true';
+  setReviewPanelOpen(!open);
+});
+document.querySelector('#reviewPanelClose').addEventListener('click', () => {
+  setReviewPanelOpen(false, { returnFocus: true });
 });
 window.addEventListener('beforeprint', () => updatePreview({ force: true }));
 window.matchMedia('(min-width: 1024px)').addEventListener('change', (event) => {

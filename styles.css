@@ -205,17 +205,32 @@ button { cursor: pointer; }
 .app-shell[data-preview-hidden="true"] .workspace { grid-template-columns: minmax(0, 1fr); }
 .app-shell[data-preview-hidden="true"] .preview-panel { display: none; }
 .editor-panel { background: linear-gradient(180deg, rgba(217, 179, 130, .10), var(--paper) 40%); padding: 58px clamp(30px, 5vw, 86px) 100px; }
-.panel-heading { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 16px; }
+.panel-heading { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-bottom: 16px; }
 .panel-heading[hidden] { display: none; }
 .panel-heading h1 { font-size: 22px; letter-spacing: -.04em; line-height: 1.2; }
 .eyebrow { color: var(--accent); font-family: Consolas, 'Courier New', monospace; font-size: 10px; letter-spacing: .08em; margin: 0 0 18px; text-transform: uppercase; }
 .eyebrow-rule { background: var(--accent); display: inline-block; height: 1px; margin: 0 7px 3px; width: 24px; }
 h1 { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; font-size: clamp(31px, 3vw, 48px); font-weight: 600; letter-spacing: -.065em; line-height: .99; margin: 0; }
 h1 em { color: var(--accent); font-family: var(--serif); font-weight: 400; }
-.completion-widget { align-items: center; background: rgba(217, 179, 130, .12); border: 1px solid var(--line); border-radius: 999px; display: flex; flex: 0 1 auto; gap: 8px; min-width: 0; padding: 3px 12px 3px 3px; }
-.completion-widget > div:last-child { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.completion-widget span { color: var(--ink); font-size: 11px; font-weight: 800; }
-.completion-widget small { color: var(--muted); font-size: 10px; }
+.completion-widget { align-items: center; background: rgba(217, 179, 130, .12); border: 1px solid var(--line); border-radius: 999px; color: var(--ink); display: flex; flex: 0 1 auto; font: inherit; gap: 8px; max-width: 100%; min-width: 0; padding: 3px 12px 3px 3px; text-align: left; }
+.completion-copy { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; min-width: 0; }
+.completion-name { color: var(--ink); font-size: 11px; font-weight: 800; overflow-wrap: anywhere; }
+.completion-widget small { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+#completionToggle, #reviewPanelClose {
+  scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom));
+  scroll-margin-top: calc(var(--notice-height, 0px) + var(--topbar-height, 0px) + var(--section-nav-offset, 0px) + 12px);
+}
+.completion-hint { color: var(--ink); font-weight: 700; }
+.review-panel { background: var(--paper); border: 1px solid var(--control-border); border-radius: 9px; display: grid; gap: 10px; margin: 0 0 12px; max-width: 100%; min-width: 0; padding: 12px; }
+.review-panel[hidden] { display: none; }
+.review-panel-bar { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
+.review-panel h2, .review-panel h3 { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.review-panel h2 { font-size: 16px; }
+.review-panel h3 { font-size: 14px; }
+.review-panel p, .review-panel li { color: var(--ink); font-size: 13px; line-height: 1.45; margin: 0; overflow-wrap: anywhere; }
+.review-panel section { display: grid; gap: 8px; min-width: 0; }
+.review-panel ul { margin: 0; padding: 0 0 0 1.2em; }
+.review-panel-bar .button { flex: 0 0 auto; }
 .completion-ring { align-items: center; background: conic-gradient(var(--focus-ring) 0deg, var(--canvas) 0deg); border-radius: 50%; display: flex; flex: 0 0 auto; height: 32px; justify-content: center; position: relative; width: 32px; }
 .completion-ring:after { background: var(--paper); border-radius: 50%; content: ''; height: 24px; position: absolute; width: 24px; }
 .completion-ring strong { font-family: Consolas, 'Courier New', monospace; font-size: 9px; position: relative; z-index: 1; }
@@ -487,6 +502,7 @@ html.page-letter { page: letter; }
   .preview-action, #printButton { display: none; }
   .editor-main { align-items: stretch; display: grid; grid-template-columns: minmax(0, 1fr); }
   .panel-heading { align-items: center; flex-direction: row; gap: 8px; grid-column: 1 / -1; margin-bottom: 2px; min-width: 0; }
+  #reviewPanel { grid-column: 1 / -1; }
   .panel-heading h1 { font-size: 20px; }
   .quick-actions { grid-column: 1 / -1; margin: 0 0 4px; min-width: 0; }
   .quick-action { gap: 8px; min-height: 44px; padding: 6px 10px; width: 100%; }

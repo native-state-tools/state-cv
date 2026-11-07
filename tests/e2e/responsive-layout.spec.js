@@ -33,8 +33,9 @@ const test = base.extend({
   }, { auto: true }]
 });
 
+const { resolveManualScreenshotDir } = require('../screenshot-dir');
+
 const longName = 'North Region Campus Hiring Panel Leadership Track 2026 Final Round';
-const shotDir = 'C:\\Users\\brian\\test-shots';
 
 const storedCv = {
   schemaVersion: 2,
@@ -276,9 +277,11 @@ async function chooseLongVersion(page) {
   await expect(page.locator('#versionBanner')).toContainText(longName);
 }
 
-async function shot(page, name) {
-  await fs.mkdir(shotDir, { recursive: true });
-  await page.screenshot({ path: path.join(shotDir, name) });
+async function shot(page, testInfo, name) {
+  const manualDir = resolveManualScreenshotDir(process.env.STATE_CV_SCREENSHOT_DIR);
+  const destination = manualDir ? path.join(manualDir, name) : testInfo.outputPath(name);
+  await fs.mkdir(path.dirname(destination), { recursive: true });
+  await page.screenshot({ path: destination });
 }
 
 async function expectClearOfNavigation(page, selector) {
@@ -322,7 +325,7 @@ test('header, section tabs, and page width stay usable', async ({ page }, testIn
     const phone = size.width < 1024;
     expectHeaderClear(await headerLayout(page), { phone, longVersion: true });
     await expectHit(page, '.more-menu > summary');
-    if (size.label === '320') await shot(page, 'v2.0f7a-320-header.png');
+    if (size.label === '320') await shot(page, testInfo, 'v2.0f7a-320-header.png');
     await expectTabsReadable(page, size.width);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
@@ -339,11 +342,11 @@ test('header, section tabs, and page width stay usable', async ({ page }, testIn
 
   if (testInfo.project.name === 'phone-390') {
     await settle(page, { width: 320, height: 640 });
-    await shot(page, 'v2.0f7a-320-tabs.png');
+    await shot(page, testInfo, 'v2.0f7a-320-tabs.png');
   }
   if (testInfo.project.name === 'desktop-1440') {
     await settle(page, { width: 1440, height: 900 });
-    await shot(page, 'v2.0f7a-1440-header.png');
+    await shot(page, testInfo, 'v2.0f7a-1440-header.png');
   }
 });
 
@@ -376,7 +379,7 @@ test('Tailor heading stays compact and the last controls clear the bottom bar', 
     await expectClearOfNavigation(page, '#tailorDoneButton');
     await page.locator('#versionSummary').fill('Layout check summary.');
     await expect(page.locator('#versionSummary')).toHaveValue('Layout check summary.');
-    await shot(page, size.file);
+    await shot(page, testInfo, size.file);
     await page.locator('#tailorDoneButton').click();
     await expect(page.locator('#tailorPanel')).toBeHidden();
   }
@@ -419,7 +422,7 @@ test('saving, saved, error, and conflict status stay readable', async ({ page },
     expect(layout.statusText).toContain('could not be saved locally');
     expect(layout.statusClipped).toBe(false);
     await expectHit(page, '.more-menu > summary');
-    if (size.label === '320') await shot(page, 'v2.0f7a-320-error-status.png');
+    if (size.label === '320') await shot(page, testInfo, 'v2.0f7a-320-error-status.png');
 
     await page.evaluate(() => showStorageConflict(4));
     await expect(page.locator('#storageNotice')).toContainText('saved in another tab');
@@ -428,8 +431,8 @@ test('saving, saved, error, and conflict status stay readable', async ({ page },
     await expectHit(page, '#keepMineButton');
     const noticeOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(noticeOverflow).toBeLessThanOrEqual(0);
-    if (size.label === '320') await shot(page, 'v2.0f7a-320-conflict.png');
-    if (size.label === '1024') await shot(page, 'v2.0f7a-1024-header.png');
+    if (size.label === '320') await shot(page, testInfo, 'v2.0f7a-320-conflict.png');
+    if (size.label === '1024') await shot(page, testInfo, 'v2.0f7a-1024-header.png');
     await page.evaluate(() => {
       const notice = document.querySelector('#storageNotice');
       notice.hidden = true;

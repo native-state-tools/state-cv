@@ -165,10 +165,32 @@
           <div class="editor-main">
             <div class="panel-heading">
               <h1>Your CV</h1>
-              <div class="completion-widget">
-                <div class="completion-ring" id="completionRing"><strong id="completionPercent">0%</strong></div>
-                <div><span>CV strength</span><small id="completionLabel">Add your details</small></div>
+              <button class="completion-widget" id="completionToggle" type="button" aria-expanded="false" aria-controls="reviewPanel">
+                <span class="completion-ring" id="completionRing"><strong id="completionPercent">0%</strong></span>
+                <span class="completion-copy">
+                  <span class="completion-name">CV completeness</span>
+                  <small id="completionLabel">Add your details</small>
+                  <small class="completion-hint">Review suggestions</small>
+                </span>
+              </button>
+            </div>
+            <div id="reviewPanel" class="review-panel" role="region" aria-labelledby="reviewPanelTitle" hidden inert>
+              <div class="review-panel-bar">
+                <h2 id="reviewPanelTitle">Review suggestions</h2>
+                <button class="button button-dark" id="reviewPanelClose" type="button" aria-label="Close review suggestions">Close</button>
               </div>
+              <section aria-labelledby="reviewCompletenessTitle">
+                <h3 id="reviewCompletenessTitle">CV completeness</h3>
+                <p id="reviewCompletenessScore">0% of the seven counted master CV checks are filled.</p>
+                <p>This percentage uses the master CV, even when a tailored version is selected. Seven checks count equally: name, professional title, email, summary, an experience entry with a role or company, an education entry with a degree or school, and skills. A check counts when its value is not empty. Spaces alone count. Location, phone, website, dates, and bullets are left out. Section check marks ignore spaces, so a check mark can disagree with this percentage. A version's hidden entries, bullets, or skills, and its title or summary, do not change this percentage.</p>
+                <p>Completeness is not ATS approval and it does not mean the CV is ready to send. A score of 100% can still have an ATS suggestion.</p>
+              </section>
+              <section aria-labelledby="reviewAtsTitle">
+                <h3 id="reviewAtsTitle">ATS checks</h3>
+                <p id="reviewAtsBasis">These checks match Export for the master CV.</p>
+                <p id="reviewAtsClear" hidden>No ATS suggestions for this selection.</p>
+                <ul id="reviewAtsList"></ul>
+              </section>
             </div>
 
             <div class="quick-actions"><button class="quick-action" id="importPdfButton" type="button"><span class="quick-icon">PDF</span><span><strong>Start from a PDF</strong><small>Extract your existing CV</small></span><span class="quick-arrow">↗</span></button></div>
