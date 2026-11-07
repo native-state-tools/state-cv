@@ -2466,37 +2466,87 @@ function hasSavedDraft() {
   }
 }
 
-function confirmReplacingSavedCv() {
-  const unreadableMessage = 'Importing will replace the saved CV data on this device. It could not be read, so no snapshot copy is available. Continue?';
-  const savedMessage = 'Importing will replace your current CV. A copy is kept in Your data > Recent snapshots. Continue?';
-  if (storageLoadFailed) return window.confirm(unreadableMessage);
+function importReplacementMessage(options) {
+  const {
+    kind,
+    readable = true,
+    blank = false,
+    savedVersionCount = 0,
+    incomingVersionCount = 0,
+    snapshot = false
+  } = options || {};
+  if (!readable) {
+    return 'Importing will replace the saved CV data on this device. It could not be read, so no snapshot copy is available. Continue?';
+  }
+  const savedVersions = Number.isInteger(savedVersionCount) && savedVersionCount > 0 ? savedVersionCount : 0;
+  const incomingVersions = Number.isInteger(incomingVersionCount) && incomingVersionCount > 0 ? incomingVersionCount : 0;
+  if (blank && savedVersions === 0) return '';
+  const snapshotNote = snapshot ? 'A copy is kept in Your data > Recent snapshots.' : '';
+  const finish = (parts) => `${parts.filter(Boolean).join(' ')} Continue?`;
+  if (kind === 'pdf') {
+    if (savedVersions > 0) {
+      const versionLabel = savedVersions === 1 ? '1 version' : `${savedVersions} versions`;
+      return finish([
+        'Importing will replace your current CV.',
+        `Your ${versionLabel} will be removed.`,
+        snapshotNote
+      ]);
+    }
+    return finish(['Importing will replace your current CV.', snapshotNote]);
+  }
+  if (incomingVersions > 0) {
+    const versionLabel = incomingVersions === 1 ? 'its 1 version' : `its ${incomingVersions} versions`;
+    return finish([
+      `Importing this backup replaces your current master CV and versions with the backup's master CV and ${versionLabel}.`,
+      snapshotNote
+    ]);
+  }
+  if (savedVersions > 0) {
+    return finish([
+      'Importing this backup replaces your current master CV and versions with the backup.',
+      'This backup has no versions.',
+      snapshotNote
+    ]);
+  }
+  return finish(['Importing will replace your current CV.', snapshotNote]);
+}
+
+function confirmReplacingSavedCv(kind, incomingVersionCount = 0) {
+  const ask = (message) => {
+    if (!message) return true;
+    return window.confirm(message);
+  };
+  if (storageLoadFailed) return ask(importReplacementMessage({ kind, readable: false }));
   let raw;
   try {
     raw = stateStorage.getItem(STORAGE_KEY);
   } catch (error) {
     storageLoadFailed = true;
     console.warn('State CV could not check for a saved draft.', error);
-    return window.confirm(unreadableMessage);
+    return ask(importReplacementMessage({ kind, readable: false }));
   }
   if (raw === null) return true;
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return window.confirm(unreadableMessage);
+    return ask(importReplacementMessage({ kind, readable: false }));
   }
   try {
     const normalized = normalizeData(parsed, { strict: true });
-    const versionCount = Array.isArray(normalized.versions) ? normalized.versions.length : 0;
-    if (isBlankCv(normalized.master) && versionCount === 0) return true;
-    if (versionCount > 0) {
-      const versionLabel = versionCount === 1 ? '1 version' : `${versionCount} versions`;
-      return window.confirm(`Importing will replace your current CV. Your ${versionLabel} will be removed. A copy is kept in Your data > Recent snapshots. Continue?`);
-    }
+    const savedVersionCount = Array.isArray(normalized.versions) ? normalized.versions.length : 0;
+    const blank = isBlankCv(normalized.master);
+    return ask(importReplacementMessage({
+      kind,
+      readable: true,
+      blank,
+      savedVersionCount,
+      incomingVersionCount: kind === 'json' ? incomingVersionCount : 0,
+      snapshot: !blank
+    }));
   } catch (error) {
-    return window.confirm(unreadableMessage);
+    return ask(importReplacementMessage({ kind, readable: false }));
   }
-  return window.confirm(savedMessage);
 }
 
 function updateLaunchScreen() {
@@ -2795,7 +2845,7 @@ async function handlePdfImport(file) {
   try {
     const lines = await extractPdfText(file);
     if (!lines.length) throw new ImportError('This PDF has no selectable text. Try an OCR-enabled PDF.');
-    if (!confirmReplacingSavedCv()) {
+    if (!confirmReplacingSavedCv('pdf')) {
       setImportStatus('Import cancelled');
       document.querySelector('#pdfInput').value = '';
       document.querySelector('#importInput').value = '';
@@ -2961,7 +3011,7 @@ document.querySelector('#importInput').addEventListener('change', async (event) 
     }
     try {
       const normalized = normalizeData(imported, { strict: true });
-      if (!confirmReplacingSavedCv()) {
+      if (!confirmReplacingSavedCv('json', Array.isArray(normalized.versions) ? normalized.versions.length : 0)) {
         setImportStatus('Import cancelled');
         event.target.value = '';
         return;
