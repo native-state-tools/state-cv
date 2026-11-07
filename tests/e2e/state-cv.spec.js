@@ -2246,9 +2246,187 @@ test('versions are named when PDF import replaces the CV', async ({ page }) => {
     dialog.dismiss();
   });
   await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
-  await expect.poll(() => message).toContain('Your 1 version will be removed.');
-  expect(message).toContain('A copy is kept in Your data > Recent snapshots.');
+  await expect.poll(() => message).toBe('Importing will replace your current CV. Your 1 version will be removed. A copy is kept in Your data > Recent snapshots. Continue?');
   await expect(page.getByLabel('Full name')).toHaveValue('Alex Morgan');
+});
+
+function savedVersionRecord(name) {
+  return {
+    schemaVersion: 2,
+    master: {
+      basics: { name, title: name ? 'Keeper' : '', location: '', email: '', phone: '', website: '' },
+      exportName: '',
+      summary: name ? 'Keep this summary.' : '',
+      experience: [{ id: 'exp_keep', role: name ? 'Keep Role' : '', company: name ? 'Keep Co' : '', dates: name ? '2019 - 2023' : '', highlights: name ? 'Kept the lights on' : '' }],
+      education: [{ id: 'edu_keep', degree: name ? 'B.S.' : '', school: name ? 'Keep University' : '', dates: name ? '2011 - 2015' : '' }],
+      skills: name ? 'Keeping' : ''
+    },
+    versions: [{
+      id: 'ver_keep',
+      name: 'Keep version',
+      hiddenEntries: name ? ['exp_keep'] : [],
+      hiddenBullets: {},
+      hiddenSkills: [],
+      title: name ? 'Keep title' : '',
+      summary: '',
+      exportName: ''
+    }]
+  };
+}
+
+const jsonVersionBackup = {
+  schemaVersion: 2,
+  master: {
+    basics: { name: 'Backup Person', title: 'Analyst', location: '', email: '', phone: '', website: '' },
+    exportName: '',
+    summary: 'Backup summary.',
+    experience: [{ id: 'exp_backup', role: 'Backup Role', company: 'Backup Co', dates: '2020 - 2024', highlights: 'Shipped the work' }],
+    education: [{ id: 'edu_backup', degree: 'B.A.', school: 'Example University', dates: '2012 - 2016' }],
+    skills: 'Writing'
+  },
+  versions: [{
+    id: 'ver_backup',
+    name: 'Backend role',
+    hiddenEntries: ['exp_backup'],
+    hiddenBullets: {},
+    hiddenSkills: [],
+    title: 'Tailored title',
+    summary: '',
+    exportName: 'Backend file'
+  }]
+};
+
+test('JSON import confirm replaces the master and versions, and cancel keeps the current CV', async ({ page }) => {
+  await page.addInitScript((stored) => localStorage.setItem('state-cv-data-v1', stored), JSON.stringify(savedVersionRecord('Keep Me')));
+  await openApp(page);
+  await enterEditor(page);
+  await expect(page.getByLabel('Full name')).toHaveValue('Keep Me');
+  const jsonMessage = 'Importing this backup replaces your current master CV and versions with the backup\'s master CV and its 1 version. A copy is kept in Your data > Recent snapshots. Continue?';
+  let cancelMessage = '';
+  page.once('dialog', (dialog) => {
+    cancelMessage = dialog.message();
+    dialog.dismiss();
+  });
+  await page.locator('#importInput').setInputFiles({
+    name: 'versions.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(jsonVersionBackup))
+  });
+  await expect.poll(() => cancelMessage).toBe(jsonMessage);
+  expect(cancelMessage).not.toContain('will be removed');
+  await expect(page.locator('#saveStatus')).toContainText('Import cancelled');
+  await expect(page.getByLabel('Full name')).toHaveValue('Keep Me');
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1'));
+    return {
+      name: data.master.basics.name,
+      role: data.master.experience[0].role,
+      version: data.versions[0] && data.versions[0].name,
+      hidden: data.versions[0] && data.versions[0].hiddenEntries[0]
+    };
+  })).toEqual({ name: 'Keep Me', role: 'Keep Role', version: 'Keep version', hidden: 'exp_keep' });
+
+  let acceptMessage = '';
+  page.once('dialog', (dialog) => {
+    acceptMessage = dialog.message();
+    dialog.accept();
+  });
+  await page.locator('#importInput').setInputFiles({
+    name: 'versions.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(jsonVersionBackup))
+  });
+  await expect(page.getByLabel('Full name')).toHaveValue('Backup Person');
+  expect(acceptMessage).toBe(jsonMessage);
+  await openSection(page, 'Experience');
+  await expect(page.getByLabel('Job title')).toHaveValue('Backup Role');
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1'));
+    const version = data.versions[0];
+    return {
+      count: data.versions.length,
+      name: version && version.name,
+      hidden: version && version.hiddenEntries.join(','),
+      title: version && version.title,
+      exportName: version && version.exportName,
+      role: data.master.experience[0].role
+    };
+  })).toEqual({
+    count: 1,
+    name: 'Backend role',
+    hidden: 'exp_backup',
+    title: 'Tailored title',
+    exportName: 'Backend file',
+    role: 'Backup Role'
+  });
+});
+
+test('an older JSON backup with no versions says so, and accepting it clears current versions', async ({ page }) => {
+  await page.addInitScript((stored) => localStorage.setItem('state-cv-data-v1', stored), JSON.stringify(savedVersionRecord('Keep Me')));
+  await openApp(page);
+  await enterEditor(page);
+  const olderMessage = 'Importing this backup replaces your current master CV and versions with the backup. This backup has no versions. A copy is kept in Your data > Recent snapshots. Continue?';
+  let cancelMessage = '';
+  page.once('dialog', (dialog) => {
+    cancelMessage = dialog.message();
+    dialog.dismiss();
+  });
+  await page.locator('#importInput').setInputFiles({
+    name: 'v1-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(validBackup))
+  });
+  await expect.poll(() => cancelMessage).toBe(olderMessage);
+  expect(cancelMessage).not.toContain('will be removed');
+  await expect(page.getByLabel('Full name')).toHaveValue('Keep Me');
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1'));
+    return data.versions[0] && data.versions[0].name;
+  })).toBe('Keep version');
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#importInput').setInputFiles({
+    name: 'v1-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(validBackup))
+  });
+  await expect(page.getByLabel('Full name')).toHaveValue('Recovered CV');
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1'));
+    return { schemaVersion: data.schemaVersion, versions: data.versions, name: data.master.basics.name };
+  })).toEqual({ schemaVersion: 2, versions: [], name: 'Recovered CV' });
+});
+
+test('a blank master with a version does not promise a snapshot on import', async ({ page }) => {
+  await page.addInitScript((stored) => localStorage.setItem('state-cv-data-v1', stored), JSON.stringify(savedVersionRecord('')));
+  await openApp(page);
+  await enterEditor(page);
+  let pdfMessage = '';
+  page.once('dialog', (dialog) => {
+    pdfMessage = dialog.message();
+    dialog.dismiss();
+  });
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'cv1-classic-single-column.pdf'));
+  await expect.poll(() => pdfMessage).toBe('Importing will replace your current CV. Your 1 version will be removed. Continue?');
+  expect(pdfMessage).not.toContain('Recent snapshots');
+  await expect(page.getByLabel('Full name')).toHaveValue('');
+
+  let jsonMessage = '';
+  page.once('dialog', (dialog) => {
+    jsonMessage = dialog.message();
+    dialog.dismiss();
+  });
+  await page.locator('#importInput').setInputFiles({
+    name: 'v1-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(validBackup))
+  });
+  await expect.poll(() => jsonMessage).toBe('Importing this backup replaces your current master CV and versions with the backup. This backup has no versions. Continue?');
+  expect(jsonMessage).not.toContain('Recent snapshots');
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('state-cv-data-v1'));
+    return data.master.basics.name === '' && data.versions[0] && data.versions[0].name === 'Keep version';
+  })).toBe(true);
 });
 
 test('version pill, Viewing banner, and Tailor stay out of Menu', async ({ page }) => {

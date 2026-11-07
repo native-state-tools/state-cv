@@ -16,12 +16,15 @@
   <main class="about-page">
     <p class="eyebrow">Local-first <span class="eyebrow-rule"></span> On this device</p>
     <h1>About and privacy</h1>
-    <p>State CV is a local-first application: your CV content stays on your device. The app may download its own static files and updates from the same origin that hosts it.</p>
+    <p>State CV is a local-first application: your CV content stays on your device. The app may download its own static files and updates from the same origin that hosts it. Choosing Support, the contact email, or another outside link leaves this page. Those links do not receive your CV.</p>
+
+    <h2>Master CV and versions</h2>
+    <p>You edit one master CV, one section at a time: Contact, Summary, Experience, Education, and Skills. A tailored version stays linked to that master. It is not its own copy. It records a name, which entries, bullets, and skills to hide, and an optional title, summary, and file name. Changing the master can change what a version shows. Preview, PDF, and plain text follow the version you are viewing.</p>
 
     <h2>What is stored</h2>
-    <p>State CV keeps the following values in this browser.</p>
+    <p>State CV keeps the following values in this browser. Browser storage is not a guarantee. The browser can clear it.</p>
     <ul>
-      <li><code>state-cv-data-v1</code> holds your CV draft. It includes a revision for detecting conflicting edits in another tab.</li>
+      <li><code>state-cv-data-v1</code> holds the master CV and any tailored versions, in one local record. It includes a revision for detecting conflicting edits in another tab. Versions stay linked to the master, so they are not independent copies.</li>
       <li><code>state-cv-snapshots-v1</code> holds up to five recent local snapshots.</li>
       <li><code>state-cv-damaged-v1</code> holds an unchanged copy of saved data that could not be read. That copy is not removed automatically. Saving stays blocked until you import a JSON backup or explicitly start a new CV.</li>
       <li><code>state-cv-persistence-v1</code> holds the result of the browser persistence request: granted, not granted, or unavailable.</li>
@@ -33,18 +36,18 @@
     <p>Only in this browser on this device.</p>
 
     <h2>What is never sent</h2>
-    <p>Your CV content, keystrokes, and files are processed entirely in your browser. No CV data, identifiers, or usage information is ever sent to any server. There is no account, no analytics, and no tracking.</p>
-    <p>Copy as plain text writes to this browser's clipboard. Download .txt saves a local file. Neither one sends the CV over the network. ATS tips run locally in the browser and send nothing anywhere. App updates are downloaded from the same origin and contain no CV content, identifiers, or usage data.</p>
+    <p>Your CV content, keystrokes, and files are processed in your browser. State CV does not send CV data, identifiers, or usage information to a server. There is no account, no analytics, and no tracking. Loading this site still requests its own pages and updates. That is separate from CV processing.</p>
+    <p>Copy as plain text writes to this browser's clipboard. Download .txt saves a local file. Neither one sends the CV over the network. ATS tips run locally in the browser and send nothing anywhere. They are not a guarantee that every applicant tracking system will read an export the same way. App updates are downloaded from the same origin and contain no CV content, identifiers, or usage data.</p>
 
     <h2>How to remove it</h2>
     <p>Open Your data and choose Clear all data. That clears the draft, snapshots, damaged copy, persistence result, premigration copy, and backup reminder from this browser. You can also remove them by clearing this site's data in the browser.</p>
 
     <h2>Backups</h2>
-    <p>Backups are your responsibility. Because data lives only in your browser, back up what matters to you. A persistence grant does not replace a JSON backup.</p>
+    <p>Backups are your responsibility. Because data lives only in your browser, back up what matters to you. A persistence grant does not replace a JSON backup, and it does not guarantee the browser will keep the CV. Menu holds Backup (JSON) and Your data. Importing a JSON backup replaces the current master CV and versions with the backup. An older backup with no versions replaces your current versions with none. Importing a PDF removes existing versions. The question mentions a snapshot only when one is kept.</p>
 
     <h2>Where to find State CV</h2>
     <p>The landing page is at the root of this site. The app is at <code>/app/</code>. State CV now lives at https://cv.nativestatetools.com/ (app at https://cv.nativestatetools.com/app/).</p>
-    <p>If you used State CV at an older address (native-state-tools.github.io/state-cv/ or nativestatetools.com/state-cv/), your saved CV stays there. Open the old address, open More and choose Backup (JSON), then use Import at the new address.</p>
+    <p>If you used State CV at an older address (native-state-tools.github.io/state-cv/ or nativestatetools.com/state-cv/), your saved CV stays there. Open the old address, open Menu (More, on an older copy) and choose Backup (JSON), then use Import at the new address.</p>
 
     <h2>Support</h2>
     <p>State CV is free and always will be. If it helped you, you can chip in on Ko-fi. Nothing is locked.</p>
