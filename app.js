@@ -1783,7 +1783,10 @@ function sheetFocusable(sheet) {
 
 function updateVersionPill() {
   const label = document.querySelector('#versionPillLabel');
-  if (label) label.textContent = versionDisplayName();
+  const pill = document.querySelector('#versionPill');
+  const name = versionDisplayName();
+  if (label) label.textContent = name;
+  if (pill) pill.setAttribute('aria-label', name);
 }
 
 function updateVersionBanner() {
@@ -2353,6 +2356,19 @@ function updateSectionChecks(status) {
   });
 }
 
+function revealSectionTab(button) {
+  const list = button && button.closest ? button.closest('.section-nav-list') : null;
+  if (!list) return;
+  const listRect = list.getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
+  const inset = 6;
+  if (buttonRect.left < listRect.left + inset) {
+    list.scrollLeft -= (listRect.left + inset) - buttonRect.left;
+  } else if (buttonRect.right > listRect.right - inset) {
+    list.scrollLeft += buttonRect.right - (listRect.right - inset);
+  }
+}
+
 function showEditorSection(sectionId, { focusHeading = false } = {}) {
   const nextId = EDITOR_SECTIONS.includes(sectionId) ? sectionId : 'contact';
   document.querySelectorAll('[data-editor-section]').forEach((section) => {
@@ -2364,6 +2380,8 @@ function showEditorSection(sectionId, { focusHeading = false } = {}) {
     if (button.dataset.sectionTarget === nextId) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
   });
+  const currentTab = document.querySelector(`[data-section-target="${nextId}"]`);
+  if (currentTab) revealSectionTab(currentTab);
   const section = document.querySelector(`[data-editor-section="${nextId}"]`);
   if (!section) return;
   const heading = section.querySelector('h2');
@@ -2708,6 +2726,7 @@ document.querySelectorAll('[data-section-target]').forEach((button) => {
     if (tailorMode) leaveTailorMode();
     showEditorSection(button.dataset.sectionTarget, { focusHeading: true });
   });
+  button.addEventListener('focus', () => revealSectionTab(button));
 });
 document.querySelectorAll('[data-section-back]').forEach((button) => {
   button.addEventListener('click', () => {
