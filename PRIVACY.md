@@ -22,7 +22,7 @@ The landing page is the site root, and the app is at `/app/`. State CV now lives
 
 - **Plain text stays on this device.** Copy as plain text writes to this browser's clipboard. Download .txt saves a local file. Neither one sends the CV over the network.
 
-- **ATS tips stay in the browser.** The ATS tips in Export run locally in the browser and send nothing anywhere. They are checks in the app, not a guarantee that every applicant tracking system will read an export the same way.
+- **ATS tips stay in the browser.** The ATS tips in Export, and the same checks in Review suggestions, run locally in the browser and send nothing anywhere. They are checks in the app, not a guarantee that every applicant tracking system will read an export the same way. CV completeness is calculated in the browser from the master CV and is not sent anywhere.
 
 - **Backup reminders.** Backup reminders are stored only in this browser under `state-cv-backup-reminder-v1` and contain no CV content.
 
