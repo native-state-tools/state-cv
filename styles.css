@@ -504,7 +504,9 @@ html.page-letter { page: letter; }
   .panel-heading { align-items: center; flex-direction: row; gap: 8px; grid-column: 1 / -1; margin-bottom: 2px; min-width: 0; }
   #reviewPanel { grid-column: 1 / -1; }
   .panel-heading h1 { font-size: 20px; }
-  .quick-actions { grid-column: 1 / -1; margin: 0 0 4px; min-width: 0; }
+  .completion-copy { gap: 0; }
+  .completion-name, .completion-widget small { line-height: 1.1; white-space: nowrap; }
+  .quick-actions { grid-column: 1 / -1; margin: 0; min-width: 0; }
   .quick-action { gap: 8px; min-height: 44px; padding: 6px 10px; width: 100%; }
   .quick-action strong { font-size: 12px; white-space: nowrap; }
   .quick-action small { font-size: 11px; line-height: 1.2; margin-top: 2px; }
