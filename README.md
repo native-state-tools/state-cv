@@ -1,6 +1,10 @@
 # State CV
 
-State CV is a local-first CV builder by Native State Tools. Your CV stays in this browser.
+State CV is a local-first CV builder. Create, tailor and export your CV without an account. All features available today remain free; future optional additions may be paid.
+
+Features available on November 8, 2026 remain free: import, editing, tailored versions, PDF and plain-text export, JSON backup and restore, and existing recovery and offline capabilities. Genuinely new optional additions may be paid later. No offering, price, or implementation is selected.
+
+State CV is by Native State Tools. Your CV stays in this browser.
 
 The landing page is at the root of the site. The app is at `/app/`.
 
@@ -10,7 +14,7 @@ State CV now lives at https://cv.nativestatetools.com/ (app at https://cv.native
 
 Contact: [hello@nativestatetools.com](mailto:hello@nativestatetools.com)
 
-![State CV editor and preview after importing a CV](docs/screenshot.png)
+![State CV editor and preview with CV completeness](docs/screenshot.png)
 
 ## How to use
 

@@ -1,7 +1,7 @@
 {
   "name": "State CV",
   "short_name": "State CV",
-  "description": "Local-first CV builder by Native State Tools. Your CV stays on your device.",
+  "description": "Local-first CV builder by Native State Tools. Create, tailor and export your CV without an account.",
   "start_url": "./app/",
   "scope": "./",
   "id": "./",

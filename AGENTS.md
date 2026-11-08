@@ -8,14 +8,15 @@
 
 ## Project profile
 
-- State CV is a local-first, privacy-first ATS CV builder by Native State Tools.
+- State CV is a local-first, privacy-first CV builder by Native State Tools.
 - Vanilla HTML/CSS/JavaScript, hosted on GitHub Pages. `index.html` is the landing page. `app/index.html` owns the app markup and its CSP. `app.js` owns editor state; `cv-import.js` owns PDF import parsing; `cv-export.js` owns PDF and plain-text export; `storage.js` owns local persistence (revisions, snapshots, damaged-data quarantine); `styles.css` owns presentation; `sw.js` is the offline service worker.
 - `server.js` is only a Node built-in-module static development server bound to `127.0.0.1:3000`. It is not an application backend.
 - PDF.js 3.11.174 and jsPDF 2.5.1 are vendored in `vendor/`. Never replace them with CDN scripts or runtime downloads.
 
 ## Non-negotiable constraints
 
-- **Data stays on the device.** No analytics, telemetry, tracking, or outbound runtime requests. No Web Share or any other path that sends a CV off the device without a separate privacy review. Accounts, sync and cloud storage are out of scope until a reviewed phase in `plan.md` approves them.
+- **Data stays on the device.** CV content is processed in the browser and is not sent off the device. The app may make same-origin requests for its app shell, static files, and updates. Those requests contain no CV content. Do not add generic same-origin uploads, analytics, telemetry, tracking, additional third-party requests, Web Share, or any other path that sends a CV off the device. Accounts, payments, sync, cloud storage, and any other data-handling change need a separate approved phase and a privacy review.
+- **Current features stay free (approved 2026-11-08).** Public wording: "State CV is a local-first CV builder. Create, tailor and export your CV without an account. All features available today remain free; future optional additions may be paid." All features available on November 8, 2026 remain free, including import, editing, tailored versions, PDF and plain-text export, JSON backup and restore, and existing recovery and offline capabilities. Do not add artificial restrictions or repackage that functionality as a paid feature. Genuinely new optional paid additions may be considered later. No offering, price, or implementation is selected. Current account-free, on-device CV processing stays unchanged. Do not soften current privacy statements to "by default."
 - **CSP is a meta tag** (GitHub Pages cannot send headers). Preserve and tighten it. Keep scripts, styles, workers, fonts, images and connections local.
 - **Classic scripts only.** No ES modules. `app/index.html` must keep working when opened from `file://`. New script files load in order from `app/index.html`.
 - **No dynamic HTML.** Build UI with DOM calls (`createElement`, `textContent`). Never use `innerHTML`, `insertAdjacentHTML` or `outerHTML` with dynamic data. No inline `style` attributes and no `setAttribute('style')`; CSSOM (`el.style.x`, `style.setProperty`) is fine.

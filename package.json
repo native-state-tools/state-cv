@@ -2,7 +2,7 @@
   "name": "state-cv",
   "version": "1.0.0",
   "private": true,
-  "description": "State CV — local-first ATS-compatible CV builder by Native State Tools",
+  "description": "State CV — local-first CV builder by Native State Tools",
   "scripts": {
     "start": "node server.js",
     "lint": "node scripts/lint-csp.js",
