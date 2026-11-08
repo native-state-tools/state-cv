@@ -1843,12 +1843,19 @@ test('Landing page shows the promises and opens the app', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByRole('heading', { level: 1, name: 'Build your CV. Keep it yours.' })).toBeVisible();
-  for (const name of ['Stays on your device', 'Free, no account', 'ATS-friendly']) {
+  await expect(page).toHaveTitle('State CV | Local-first CV builder');
+  await expect(page.locator('.landing-lead')).toContainText('State CV is a local-first CV builder. Create, tailor and export your CV without an account. All features available today remain free; future optional additions may be paid.');
+  await expect(page.locator('.landing-lead')).toContainText('That is not a guarantee that every system will parse it the same way.');
+  await expect(page.locator('.eyebrow')).toContainText('Current features stay free');
+  for (const name of ['Stays on your device', 'Current features stay free', 'ATS-friendly']) {
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   }
-  for (const name of ['Where is my data?', 'How do I back up?', 'Is it really free?', 'Does it work offline?']) {
+  for (const name of ['Where is my data?', 'How do I back up?', 'Do current features stay free?', 'Does it work offline?']) {
     await expect(page.locator('summary').filter({ hasText: name })).toBeVisible();
   }
+  await expect(page.locator('.landing-faq')).toContainText('All features available today remain free, with no account. Future optional additions may be paid.');
+  await expect(page.locator('.landing-faq')).toContainText('After the first visit, yes, in supported browsers.');
+  await expect(page.locator('.landing-card').filter({ hasText: 'Stays on your device' })).toContainText('No account, and your CV is not uploaded.');
   const dimensions = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth
@@ -1894,7 +1901,7 @@ test('Support State CV and contact email are plain links, with no Ko-fi request 
   await page.goto('/about.html');
   await expectSupportLinks(page);
   await expect(page.locator('a[href="mailto:hello@nativestatetools.com"]')).toHaveCount(1);
-  await expect(page.getByText('State CV is free and always will be. If it helped you, you can chip in on Ko-fi. Nothing is locked.')).toBeVisible();
+  await expect(page.getByText('All features available today remain free, with no account. Future optional additions may be paid. If State CV helped you, you can chip in on Ko-fi. That support is voluntary. It is not a purchase, and it is not required to use the features available today.')).toBeVisible();
   await expect(page.getByText("The Support link opens Ko-fi's website in a new tab. State CV itself sends nothing to Ko-fi, and your CV never leaves your device.")).toBeVisible();
 
   await page.goto('/app/');
