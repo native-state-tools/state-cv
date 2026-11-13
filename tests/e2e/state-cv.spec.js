@@ -86,6 +86,22 @@ const sectionHeadings = {
   Skills: 'Skills'
 };
 
+async function dismissImportReview(page) {
+  const dialog = page.locator('#importReviewDialog');
+  if (await dialog.evaluate((element) => element.open)) await page.locator('#dismissImportReviewButton').click();
+  await expect(dialog).toBeHidden();
+}
+
+async function expandCollapsedEntry(page, entry) {
+  const body = entry.locator('.entry-card-body');
+  await expect(async () => {
+    await dismissImportReview(page);
+    const expand = entry.getByRole('button', { name: /^Expand / });
+    if (await expand.count()) await expand.click({ timeout: 1000 });
+    await expect(body).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 8000 });
+}
+
 async function openSection(page, name) {
   const button = page.locator('.section-nav').getByRole('button', { name: new RegExp(`(^|\\s)${name}(, complete)?$`) });
   const heading = page.getByRole('heading', { level: 2, name: sectionHeadings[name], exact: true });
@@ -2581,7 +2597,8 @@ test('exported multiple date ranges import back into the same fields', async ({ 
   expect(downloadPath).not.toBeNull();
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('#pdfInput').setInputFiles(downloadPath);
-  await expect(page.locator('#importReviewDialog')).toBeHidden();
+  await expect(page.locator('#saveStatus')).toContainText('PDF imported');
+  await dismissImportReview(page);
   await expect(page.getByLabel('Full name')).toHaveValue('Riley Example');
   await expect(page.getByLabel('Professional title')).toHaveValue('Product Designer');
   await expect(page.getByLabel('Location')).toHaveValue('Austin, TX');
@@ -2597,8 +2614,7 @@ test('exported multiple date ranges import back into the same fields', async ({ 
   await expect(experience).toHaveCount(2);
   for (let index = 0; index < roundTrip.experience.length; index += 1) {
     const entry = experience.nth(index);
-    const expand = entry.getByRole('button', { name: /^Expand / });
-    if (await expand.count()) await expand.click();
+    await expandCollapsedEntry(page, entry);
     const job = roundTrip.experience[index];
     await expect(entry.locator('[data-key="role"]')).toHaveValue(job.role);
     await expect(entry.locator('[data-key="company"]')).toHaveValue(job.company);
@@ -2611,8 +2627,7 @@ test('exported multiple date ranges import back into the same fields', async ({ 
   await expect(education).toHaveCount(2);
   for (let index = 0; index < roundTrip.education.length; index += 1) {
     const entry = education.nth(index);
-    const expand = entry.getByRole('button', { name: /^Expand / });
-    if (await expand.count()) await expand.click();
+    await expandCollapsedEntry(page, entry);
     const record = roundTrip.education[index];
     await expect(entry.locator('[data-key="degree"]')).toHaveValue(record.degree);
     await expect(entry.locator('[data-key="school"]')).toHaveValue(record.school);

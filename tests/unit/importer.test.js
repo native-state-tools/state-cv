@@ -186,6 +186,36 @@ test('a role and Remote line keeps the company on the following line', () => {
   assert.equal(jobs[0].highlights.includes('Carvana'), false);
 });
 
+test('a role and Hybrid line keeps the company on the following line', () => {
+  const jobs = parseExperience([
+    'Customer Advocate | Hybrid',
+    '01/2022 \u2013 09/2022',
+    'Carvana',
+    '\u2022 Helped customers'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate, Hybrid');
+  assert.equal(jobs[0].company, 'Carvana');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(jobs[0].highlights, 'Helped customers');
+  assert.equal(jobs[0].highlights.includes('Carvana'), false);
+});
+
+test('a role and Remote (US) line keeps the company on the following line', () => {
+  const jobs = parseExperience([
+    'Customer Advocate | Remote (US)',
+    '01/2022 \u2013 09/2022',
+    'Carvana',
+    '\u2022 Helped customers'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate, Remote (US)');
+  assert.equal(jobs[0].company, 'Carvana');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(jobs[0].highlights, 'Helped customers');
+  assert.equal(jobs[0].highlights.includes('Carvana'), false);
+});
+
 test('a company and location line keeps the job title on the following line', () => {
   const jobs = parseExperience([
     'Acme Corp \u2014 Austin, TX',

@@ -186,13 +186,6 @@ function datesAndParts(line) {
   return { dates, parts };
 }
 
-function placeOrRemotePart(part) {
-  const text = trimImportSeparators(cleanImportedLine(part));
-  if (!text) return false;
-  if (/^remote$/i.test(text)) return true;
-  return /^[A-Z][A-Za-z.'\- ]{1,40},\s*(?:[A-Z]{2}|[A-Z][a-z]+(?: [A-Z][a-z]+)*)$/.test(text) && !/[@\d]/.test(text);
-}
-
 function educationYearParts(line) {
   const columns = String(line ?? '').split('\t').map((part) => cleanImportedLine(part)).filter(Boolean);
   if (columns.length >= 2 && /^(?:19|20)\d{2}$/.test(columns.at(-1))) {
@@ -264,21 +257,17 @@ function parseExperience(lines) {
       if (prev2 >= 0) { role = joined(prev2); company = joined(prev); start = prev2; }
       else if (prev >= 0) {
         const parts = splitImportParts(raw[prev]).filter((part) => !isDateShaped(part));
-        const remainder = parts.slice(1);
         const immediate = anchor + 1 < nextAnchor && headerLike(raw[anchor + 1]) ? anchor + 1 : -1;
         const immediateIsNextJob = immediate >= 0 && immediate + 1 === nextAnchor && nextAnchor < raw.length;
         const companyLine = immediate >= 0 && !immediateIsNextJob ? immediate : -1;
-        if (parts.length >= 2 && companyLine >= 0 && remainder.every(placeOrRemotePart)) {
+        if (companyLine >= 0) {
           role = joined(prev);
           company = joined(companyLine);
           end = companyLine;
         } else if (parts.length >= 2) {
           role = parts[0];
-          company = remainder.join(', ');
-        } else {
-          role = parts[0] || '';
-          if (next >= 0) { company = joined(next); end = next; }
-        }
+          company = parts.slice(1).join(', ');
+        } else role = parts[0] || '';
         start = prev;
       }
     } else if (prev >= 0 && next < 0) {
