@@ -296,6 +296,18 @@
       <button class="button button-ghost" id="closeYourDataFooterButton" type="button">Close</button>
     </div>
   </dialog>
+  <dialog class="data-dialog" id="importReviewDialog" aria-labelledby="importReviewTitle">
+    <div class="data-dialog-header">
+      <div><p class="eyebrow">On this device</p><h2 id="importReviewTitle">Check imported fields</h2></div>
+      <button class="icon-button" id="closeImportReviewButton" type="button" aria-label="Close import review">×</button>
+    </div>
+    <p class="data-dialog-note">These fields look incomplete or mismatched. The CV stays on this device.</p>
+    <ul class="import-review-list" id="importReviewList"></ul>
+    <div class="data-dialog-actions">
+      <button class="button button-accent" id="reviewImportedFieldsButton" type="button">Review in editor</button>
+      <button class="button button-ghost" id="dismissImportReviewButton" type="button">Close</button>
+    </div>
+  </dialog>
   <template id="experienceTemplate">
     <article class="repeat-item">
       <div class="entry-card-header">

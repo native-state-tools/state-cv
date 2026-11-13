@@ -150,6 +150,8 @@ button { cursor: pointer; }
 .data-summary dt { color: var(--muted); font-size: 11px; margin-bottom: 7px; }
 .data-summary dd { font-size: 13px; line-height: 1.45; margin: 0; overflow-wrap: anywhere; }
 .data-dialog-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 12px 0 22px; }
+.import-review-list { margin: 0 0 18px; padding-left: 1.2em; }
+.import-review-list li { color: var(--ink); font-size: 14px; line-height: 1.45; margin: 0 0 8px; }
 .data-snapshots { border-top: 1px solid var(--line); padding-top: 18px; }
 .data-snapshots h3 { font-size: 15px; margin: 0 0 12px; }
 .data-snapshots > p { color: var(--muted); font-size: 13px; }
@@ -361,7 +363,7 @@ textarea { line-height: 1.5; resize: vertical; }
 .resume-header { border-bottom: 2px solid #1d2522; padding-bottom: 19px; }
 .resume-header h2 { font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; font-size: 29px; letter-spacing: -.06em; margin: 0 0 4px; }
 .resume-title, .resume-section > h3, .entry-date { font-family: Consolas, 'Courier New', monospace; }
-.resume-title { color: #56615c; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+.resume-title { color: #56615c; font-size: 9px; letter-spacing: .04em; }
 .resume-contact { color: #5d6863; display: flex; flex-wrap: wrap; font-size: 9px; gap: 7px 13px; margin-top: 13px; }
 .resume-contact span:not(:last-child)::after { color: #b1b9b5; content: '·'; margin-left: 13px; }
 .resume-section { margin-top: 23px; }

@@ -286,7 +286,7 @@ function exportPdf(data) {
 
     doc.setTextColor(ink[0], ink[1], ink[2]);
     const name = pdfDrawText(basics.name).trim();
-    const title = pdfDrawText(String(basics.title ?? '').toUpperCase()).trim();
+    const title = pdfDrawText(String(basics.title ?? '')).trim();
     if (name) writeLines(name, sizes.name, { bold: true, leading: sizes.name * 1.15 });
     if (title) writeLines(title, sizes.title, { leading: sizes.title * 1.3 });
     const emailUrl = asciiLink(basics.email, 'mailto:');
