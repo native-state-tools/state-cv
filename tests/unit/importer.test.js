@@ -16,19 +16,22 @@ function sliceBetween(startMarker, endMarker) {
 const sandbox = vm.createContext({});
 vm.runInContext([
   sliceBetween('function pdfItemBoxes(items) {', '\nasync function extractPdfText('),
-  sliceBetween('function dateLine(line) {', '\nfunction mergeWrappedLines('),
+  sliceBetween('function dateLine(line) {', '\nfunction parseEducation(lines) {'),
   sliceBetween('function parseEducation(lines) {', '\nfunction splitSkills('),
   sliceBetween('function splitSkills(lines) {', '\nfunction detectContact('),
   sliceBetween('function detectContact(text) {', '\nfunction importPdfLines('),
   'globalThis.pdfItemsToLines = pdfItemsToLines;',
   'globalThis.dateLine = dateLine;',
   'globalThis.extractDate = extractDate;',
+  'globalThis.parseExperience = parseExperience;',
   'globalThis.parseEducation = parseEducation;',
+  'globalThis.reviewImportedEntries = reviewImportedEntries;',
+  'globalThis.isDateShaped = isDateShaped;',
   'globalThis.splitSkills = splitSkills;',
   'globalThis.detectContact = detectContact;'
 ].join('\n'), sandbox);
 
-const { pdfItemsToLines, dateLine, extractDate, parseEducation, splitSkills, detectContact } = sandbox;
+const { pdfItemsToLines, dateLine, extractDate, parseExperience, parseEducation, reviewImportedEntries, isDateShaped, splitSkills, detectContact } = sandbox;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('detectContact reads phone formats and skips dates, ids, and the email domain', () => {
@@ -125,6 +128,183 @@ test('date pattern reads month, numeric, and to ranges', () => {
     assert.equal(dateLine(range), true);
     assert.equal(extractDate(range), range);
   });
+  assert.equal(dateLine('2021'), false);
+  assert.equal(extractDate('2021'), '');
+  assert.equal(dateLine('Class of 2021'), false);
+});
+
+function fixtureBlocks(name) {
+  const text = fs.readFileSync(path.join(__dirname, '../fixtures', name), 'utf8').replace(/\r\n/g, '\n');
+  const blocks = {};
+  let current = '';
+  text.split('\n').forEach((line) => {
+    if (line.startsWith('--- ')) {
+      current = line.slice(4).trim();
+      blocks[current] = [];
+      return;
+    }
+    if (current && line.trim()) blocks[current].push(line);
+  });
+  return blocks;
+}
+
+test('semicolon date ranges stay in dates and keep the company', () => {
+  const lines = fixtureBlocks('import-field-shapes.txt')['semicolon-ranges'];
+  assert.ok(lines[0].includes('\t'), 'expected a tab between the role and the ranges');
+  const jobs = parseExperience(lines);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate');
+  assert.equal(jobs[0].company, 'Sample Autos');
+  assert.equal(jobs[0].dates, '01/2022 - 09/2022; 07/2023 - 08/2025');
+  assert.equal(jobs[0].highlights, 'Kept the handover list current.');
+  assert.equal(isDateShaped(jobs[0].company), false);
+  assert.equal(isDateShaped('01/2022 - 09/2022; 07/2023 - 08/2025'), true);
+});
+
+test('a long role | company header keeps both fields', () => {
+  const jobs = parseExperience(fixtureBlocks('import-field-shapes.txt')['long-header']);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate II & Training Mentor');
+  assert.equal(jobs[0].company, 'Sample Autos, Jackson, MO');
+  assert.equal(jobs[0].dates, '07/2023 \u2013 08/2025');
+  assert.equal(jobs[0].highlights, 'Mentored new associates on service protocols.');
+  assert.equal(jobs[0].highlights.includes('Sample Autos'), false);
+});
+
+test('a role and Remote line keeps the company on the following line', () => {
+  const jobs = parseExperience([
+    'Customer Advocate | Remote',
+    '01/2022 \u2013 09/2022',
+    'Carvana',
+    '\u2022 Helped customers'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate, Remote');
+  assert.equal(jobs[0].company, 'Carvana');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(jobs[0].highlights, 'Helped customers');
+  assert.equal(jobs[0].highlights.includes('Carvana'), false);
+});
+
+test('a role and Hybrid line keeps the company on the following line', () => {
+  const jobs = parseExperience([
+    'Customer Advocate | Hybrid',
+    '01/2022 \u2013 09/2022',
+    'Carvana',
+    '\u2022 Helped customers'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate, Hybrid');
+  assert.equal(jobs[0].company, 'Carvana');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(jobs[0].highlights, 'Helped customers');
+  assert.equal(jobs[0].highlights.includes('Carvana'), false);
+});
+
+test('a role and Remote (US) line keeps the company on the following line', () => {
+  const jobs = parseExperience([
+    'Customer Advocate | Remote (US)',
+    '01/2022 \u2013 09/2022',
+    'Carvana',
+    '\u2022 Helped customers'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate, Remote (US)');
+  assert.equal(jobs[0].company, 'Carvana');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(jobs[0].highlights, 'Helped customers');
+  assert.equal(jobs[0].highlights.includes('Carvana'), false);
+});
+
+test('a company and location line keeps the job title on the following line', () => {
+  const jobs = parseExperience([
+    'Acme Corp \u2014 Austin, TX',
+    '01/2022 \u2013 09/2022',
+    'Senior Analyst'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Acme Corp, Austin, TX');
+  assert.equal(jobs[0].company, 'Senior Analyst');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(String(jobs[0].highlights).includes('Senior Analyst'), false);
+});
+
+test('separate role and company lines with one date range still import', () => {
+  const jobs = parseExperience([
+    'Senior Operations Analyst\tMar 2021 \u2013 Present',
+    'Harbor Logistics Group, Austin, TX',
+    'Cut average order-to-ship time by 22% by redesigning the dispatch workflow across 4 warehouses.'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Senior Operations Analyst');
+  assert.equal(jobs[0].company, 'Harbor Logistics Group, Austin, TX');
+  assert.equal(jobs[0].dates, 'Mar 2021 \u2013 Present');
+  assert.match(jobs[0].highlights, /dispatch workflow/);
+});
+
+test('standalone education year stays out of the school field', () => {
+  const lines = fs.readFileSync(path.join(__dirname, '../fixtures/alex-example-education.txt'), 'utf8')
+    .replace(/\r\n/g, '\n').split('\n').map((line) => line.trim()).filter(Boolean);
+  assert.deepEqual(lines, [
+    'Associate Degree in Business Administration',
+    'Example Community College',
+    '2021'
+  ]);
+  const parsed = parseEducation(lines);
+  assert.deepEqual(plain(parsed), [{
+    degree: 'Associate Degree in Business Administration',
+    school: 'Example Community College',
+    dates: '2021'
+  }]);
+
+  const combined = parseEducation(['Associate Degree in Business Administration\t2021', 'Example Community College']);
+  assert.equal(combined[0].degree, 'Associate Degree in Business Administration');
+  assert.equal(combined[0].school, 'Example Community College');
+  assert.equal(combined[0].dates, '2021');
+
+  const several = parseEducation([
+    'Associate Degree in Business Administration',
+    'Example Community College',
+    '2021',
+    'B.A. History',
+    'State College',
+    'May 2018 - Jun 2020'
+  ]);
+  assert.deepEqual(plain(several), [
+    { degree: 'Associate Degree in Business Administration', school: 'Example Community College', dates: '2021' },
+    { degree: 'B.A. History', school: 'State College', dates: 'May 2018 - Jun 2020' }
+  ]);
+
+  const yearLike = parseEducation(['Class of 2021 Leadership Seminar', 'Example Community College']);
+  assert.equal(yearLike[0].degree, 'Class of 2021 Leadership Seminar');
+  assert.equal(yearLike[0].school, 'Example Community College');
+  assert.equal(yearLike[0].dates, '');
+});
+
+test('import review flags empty or date-like company, dates, and education fields', () => {
+  const flags = reviewImportedEntries({
+    experience: [
+      { role: 'Advocate', company: '', dates: '', highlights: 'Kept notes.' },
+      { role: 'Driver', company: '07/2023 - 08/2025', dates: '01/2022 - 09/2022', highlights: '' },
+      { role: '', company: '', dates: '', highlights: '' }
+    ],
+    education: [
+      { degree: 'Certificate', school: '', dates: '' },
+      { degree: '2021', school: '2021', dates: '' }
+    ]
+  });
+  const got = flags.map((flag) => `${flag.section}:${flag.field}:${flag.issue}`);
+  const expected = [
+    'experience:company:empty',
+    'experience:dates:empty',
+    'experience:company:date',
+    'education:school:empty',
+    'education:dates:empty',
+    'education:degree:date',
+    'education:school:date',
+    'education:dates:empty'
+  ];
+  assert.equal(got.join('\n'), expected.join('\n'), JSON.stringify(flags, null, 2));
 });
 
 function pdfTextItem(str, x, y, width, size = 10) {

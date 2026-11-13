@@ -1179,6 +1179,7 @@ function restoreSnapshot(index, normalizedData) {
 }
 
 let dataDialogReturnFocus = null;
+let importReviewFlags = [];
 function openYourDataDialog() {
   renderYourDataDialog();
   const dialog = document.querySelector('#yourDataDialog');
@@ -1191,6 +1192,44 @@ function openYourDataDialog() {
 
 function closeYourDataDialog() {
   if (document.querySelector('#yourDataDialog').open) document.querySelector('#yourDataDialog').close();
+}
+
+function importReviewText(flag) {
+  const place = flag.section === 'education' ? 'Education' : 'Experience';
+  const fieldName = { company: 'company', dates: 'dates', school: 'school', degree: 'degree' }[flag.field] || flag.field;
+  const problem = flag.issue === 'date' ? `${fieldName} looks like a date` : `${fieldName} ${fieldName === 'dates' ? 'are' : 'is'} empty`;
+  return `${place} ${flag.index + 1} (${flag.label}): ${problem}.`;
+}
+
+function closeImportReview() {
+  const dialog = document.querySelector('#importReviewDialog');
+  if (dialog && dialog.open) dialog.close();
+}
+
+function focusImportedField(flag) {
+  if (!flag) return;
+  const type = flag.section === 'education' ? 'education' : 'experience';
+  showEditorSection(type);
+  const items = resumeData[type] || [];
+  const flags = expandedFlags(type, items.length);
+  if (flag.index >= 0 && flag.index < flags.length) flags[flag.index] = true;
+  rememberExpanded(type, flags);
+  renderRepeaters();
+  focusRepeatEntry(type, flag.index, `[data-key="${flag.field}"]`);
+}
+
+function showImportReview(flags) {
+  importReviewFlags = Array.isArray(flags) ? flags : [];
+  const dialog = document.querySelector('#importReviewDialog');
+  const list = document.querySelector('#importReviewList');
+  if (!dialog || !list || !importReviewFlags.length) return;
+  list.replaceChildren();
+  importReviewFlags.forEach((flag) => {
+    const item = document.createElement('li');
+    item.textContent = importReviewText(flag);
+    list.append(item);
+  });
+  if (!dialog.open) dialog.showModal();
 }
 
 let clearDataConfirmationTimer;
@@ -1629,7 +1668,8 @@ function moveRepeatEntry(type, fromIndex, direction) {
   renderRepeaters();
   updatePreview();
   updateCompletion();
-  scheduleSave(`Moved to position ${toIndex + 1} of ${items.length}`);
+  scheduleSave();
+  showActionToast(`Moved to position ${toIndex + 1} of ${items.length}`);
   focusMoveButton(type, toIndex, direction);
 }
 
@@ -2937,8 +2977,14 @@ async function handlePdfImport(file) {
       setImportStatus('PDF imported in this tab, but it could not be saved locally', true);
       return;
     }
-    setImportStatus(`PDF imported · ${imported.experience + imported.education} entries`);
+    const reviewFlags = reviewImportedEntries(resumeData);
     closeLaunchScreen();
+    if (reviewFlags.length) {
+      setImportStatus(`PDF imported · ${imported.experience + imported.education} entries · ${reviewFlags.length} to check`);
+      showImportReview(reviewFlags);
+      return;
+    }
+    setImportStatus(`PDF imported · ${imported.experience + imported.education} entries`);
   } catch (error) {
     if (error instanceof ImportError) {
       setImportStatus(error.message, true);
@@ -2958,6 +3004,17 @@ document.querySelector('#pdfInput').addEventListener('change', async (event) => 
   const [file] = event.target.files;
   await handlePdfImport(file);
   event.target.value = '';
+});
+document.querySelector('#closeImportReviewButton').addEventListener('click', closeImportReview);
+document.querySelector('#dismissImportReviewButton').addEventListener('click', closeImportReview);
+document.querySelector('#reviewImportedFieldsButton').addEventListener('click', () => {
+  const flag = importReviewFlags[0];
+  closeImportReview();
+  focusImportedField(flag);
+});
+document.querySelector('#importReviewDialog').addEventListener('cancel', (event) => {
+  event.preventDefault();
+  closeImportReview();
 });
 document.querySelector('#exportFilename').addEventListener('input', (event) => {
   const version = activeVersion();

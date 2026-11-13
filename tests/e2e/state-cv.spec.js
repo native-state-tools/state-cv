@@ -86,6 +86,22 @@ const sectionHeadings = {
   Skills: 'Skills'
 };
 
+async function dismissImportReview(page) {
+  const dialog = page.locator('#importReviewDialog');
+  if (await dialog.evaluate((element) => element.open)) await page.locator('#dismissImportReviewButton').click();
+  await expect(dialog).toBeHidden();
+}
+
+async function expandCollapsedEntry(page, entry) {
+  const body = entry.locator('.entry-card-body');
+  await expect(async () => {
+    await dismissImportReview(page);
+    const expand = entry.getByRole('button', { name: /^Expand / });
+    if (await expand.count()) await expand.click({ timeout: 1000 });
+    await expect(body).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 8000 });
+}
+
 async function openSection(page, name) {
   const button = page.locator('.section-nav').getByRole('button', { name: new RegExp(`(^|\\s)${name}(, complete)?$`) });
   const heading = page.getByRole('heading', { level: 2, name: sectionHeadings[name], exact: true });
@@ -2508,4 +2524,177 @@ test('version pill, Viewing banner, and Tailor stay out of Menu', async ({ page 
     await expect(page.locator('#tailorPanel')).toBeHidden();
     await expect(page.locator('#resumeForm')).toBeVisible();
   }
+});
+
+test('moving an entry keeps Saved locally and shows the move note separately', async ({ page }) => {
+  await openStoredCv(page, {
+    schemaVersion: 1,
+    basics: { name: 'Alex Morgan', title: 'Designer', location: '', email: 'alex@example.com', phone: '', website: '' },
+    summary: '',
+    experience: [
+      { role: 'First Role', company: 'North Co', dates: '2020 - 2022', highlights: 'Did the first job.' },
+      { role: 'Second Role', company: 'South Co', dates: '2022 - 2024', highlights: 'Did the second job.' }
+    ],
+    education: [{ degree: 'B.A.', school: 'State University', dates: '2016' }],
+    skills: ''
+  });
+  await openSection(page, 'Experience');
+  await page.locator('#experienceList').getByRole('button', { name: 'Move down' }).first().click();
+  await expect(page.locator('#actionToast')).toContainText('Moved to position 2 of 2');
+  await expect(page.locator('#experienceList article').first().getByLabel('Job title')).toHaveValue('Second Role');
+  await expect(page.locator('#saveStatus')).toContainText('Saved locally');
+  await expect(page.locator('#saveStatus')).not.toContainText('Moved to position');
+});
+
+test('exported multiple date ranges import back into the same fields', async ({ page }) => {
+  const roundTrip = {
+    schemaVersion: 1,
+    basics: {
+      name: 'Riley Example',
+      title: 'Product Designer',
+      location: 'Austin, TX',
+      email: 'riley@example.com',
+      phone: '(555) 123-4567',
+      website: 'linkedin.com/in/rileyexample'
+    },
+    exportName: 'Riley Example CV',
+    summary: 'Designer who keeps records clear.',
+    experience: [
+      {
+        role: 'Customer Advocate',
+        company: 'Sample Autos',
+        dates: '01/2022 - 09/2022; 07/2023 - 08/2025',
+        highlights: 'Kept the handover list current.'
+      },
+      {
+        role: 'Site Lead',
+        company: 'Sample Warehouse',
+        dates: '11/2019 - 02/2020',
+        highlights: 'Supervised the daily floor.'
+      }
+    ],
+    education: [
+      {
+        degree: 'Associate Degree in Business Administration',
+        school: 'Example Community College',
+        dates: '2021'
+      },
+      {
+        degree: 'B.S., Supply Chain Management',
+        school: 'State University',
+        dates: '2015 - 2019'
+      }
+    ],
+    skills: 'Scheduling, Records, Reporting'
+  };
+  await openStoredCv(page, roundTrip);
+  const download = await exportPdfFromUi(page);
+  const exported = await readPdfDocument(page, download);
+  const pdfText = exported.items.join('');
+  expect(pdfText).toContain('Product Designer');
+  expect(exported.items.map((item) => item.trim())).not.toContain('PRODUCT DESIGNER');
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#pdfInput').setInputFiles(downloadPath);
+  await expect(page.locator('#saveStatus')).toContainText('PDF imported');
+  await dismissImportReview(page);
+  await expect(page.getByLabel('Full name')).toHaveValue('Riley Example');
+  await expect(page.getByLabel('Professional title')).toHaveValue('Product Designer');
+  await expect(page.getByLabel('Location')).toHaveValue('Austin, TX');
+  await expect(page.getByLabel('Email')).toHaveValue('riley@example.com');
+  await expect(page.getByLabel('Phone')).toHaveValue('(555) 123-4567');
+  await expect(page.getByLabel('LinkedIn or portfolio')).toHaveValue('linkedin.com/in/rileyexample');
+  await expect(page.locator('textarea[data-path="summary"]')).toHaveValue('Designer who keeps records clear.');
+  const edit = page.getByRole('button', { name: 'Edit', exact: true });
+  if (await edit.isVisible()) await edit.click();
+
+  await openSection(page, 'Experience');
+  const experience = page.locator('#experienceList article');
+  await expect(experience).toHaveCount(2);
+  for (let index = 0; index < roundTrip.experience.length; index += 1) {
+    const entry = experience.nth(index);
+    await expandCollapsedEntry(page, entry);
+    const job = roundTrip.experience[index];
+    await expect(entry.locator('[data-key="role"]')).toHaveValue(job.role);
+    await expect(entry.locator('[data-key="company"]')).toHaveValue(job.company);
+    await expect(entry.locator('[data-key="dates"]')).toHaveValue(job.dates);
+    await expect(entry.locator('[data-key="highlights"]')).toHaveValue(job.highlights);
+  }
+
+  await openSection(page, 'Education');
+  const education = page.locator('#educationList article');
+  await expect(education).toHaveCount(2);
+  for (let index = 0; index < roundTrip.education.length; index += 1) {
+    const entry = education.nth(index);
+    await expandCollapsedEntry(page, entry);
+    const record = roundTrip.education[index];
+    await expect(entry.locator('[data-key="degree"]')).toHaveValue(record.degree);
+    await expect(entry.locator('[data-key="school"]')).toHaveValue(record.school);
+    await expect(entry.locator('[data-key="dates"]')).toHaveValue(record.dates);
+  }
+
+  await openSection(page, 'Skills');
+  await expect(page.getByLabel(/^Skills/)).toHaveValue('Scheduling, Records, Reporting');
+});
+
+test('Import fixture alex example keeps the standalone education year', async ({ page }) => {
+  await openApp(page);
+  await page.locator('#pdfInput').setInputFiles(path.join(__dirname, '../fixtures', 'alex-example-test-cv.pdf'));
+  await expect(page.getByLabel('Full name')).toHaveValue('Alex Example');
+  await expect(page.getByLabel('Professional title')).toHaveValue('Operations Coordinator');
+  await expect(page.getByLabel('Email')).toHaveValue('alex@example.com');
+  await expect(page.getByLabel('Location')).toHaveValue('Chicago, IL');
+  await expect(page.locator('#importReviewDialog')).toBeHidden();
+
+  await openSection(page, 'Experience');
+  const experience = page.locator('#experienceList article');
+  await expect(experience).toHaveCount(2);
+  const jobs = [
+    ['Operations Coordinator', 'Example Services', 'Jan 2023 \u2013 Present'],
+    ['Customer Service Assistant', 'Sample Supply Company', 'Jun 2021 \u2013 Dec 2022']
+  ];
+  for (let index = 0; index < jobs.length; index += 1) {
+    const entry = experience.nth(index);
+    const expand = entry.getByRole('button', { name: /^Expand / });
+    if (await expand.count()) await expand.click();
+    await expect(entry.locator('[data-key="role"]')).toHaveValue(jobs[index][0]);
+    await expect(entry.locator('[data-key="company"]')).toHaveValue(jobs[index][1]);
+    await expect(entry.locator('[data-key="dates"]')).toHaveValue(jobs[index][2]);
+  }
+
+  await openSection(page, 'Education');
+  const education = page.locator('#educationList article');
+  await expect(education).toHaveCount(1);
+  await expect(education.locator('[data-key="degree"]')).toHaveValue('Associate Degree in Business Administration');
+  await expect(education.locator('[data-key="school"]')).toHaveValue('Example Community College');
+  await expect(education.locator('[data-key="dates"]')).toHaveValue('2021');
+});
+
+test('import review flags empty company, dates, and school on this device', async ({ page }) => {
+  await openApp(page);
+  const buffer = Buffer.from(await page.evaluate(() => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    ['Sam Review', 'sam.review@example.com', 'EXPERIENCE', 'Warehouse Associate', 'EDUCATION', 'Certificate'].forEach((line, index) => {
+      doc.text(line, 48, 72 + index * 22);
+    });
+    return Array.from(new Uint8Array(doc.output('arraybuffer')));
+  }));
+  await page.locator('#pdfInput').setInputFiles({
+    name: 'sparse-review.pdf',
+    mimeType: 'application/pdf',
+    buffer
+  });
+  const dialog = page.getByRole('dialog', { name: 'Check imported fields' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('stays on this device');
+  await expect(dialog).toContainText('company is empty');
+  await expect(dialog).toContainText('dates are empty');
+  await expect(dialog).toContainText('school is empty');
+  await dialog.getByRole('button', { name: 'Review in editor' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByLabel('Company')).toBeFocused();
 });

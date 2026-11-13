@@ -151,6 +151,51 @@ function splitImportParts(line) {
   return String(line ?? '').split(/\s*(?:\t|\||·|\s[—–]\s)\s*/).map((part) => trimImportSeparators(cleanImportedLine(part))).filter(Boolean);
 }
 
+function extractAllDates(line) {
+  const found = [];
+  let rest = String(line ?? '');
+  for (let guard = 0; guard < 6; guard += 1) {
+    const match = rest.match(IMPORT_DATE_PATTERN);
+    if (!match || !match[0]) break;
+    found.push(match[0].replace(/\s+/g, ' ').trim());
+    rest = `${rest.slice(0, match.index)} ${rest.slice(match.index + match[0].length)}`;
+  }
+  return { dates: found.join('; '), rest };
+}
+
+function isDateShaped(value) {
+  const text = trimImportSeparators(cleanImportedLine(value));
+  if (!text) return false;
+  if (/^(?:19|20)\d{2}$/.test(text)) return true;
+  const extracted = extractAllDates(text);
+  return Boolean(extracted.dates) && !trimImportSeparators(cleanImportedLine(extracted.rest));
+}
+
+function datesAndParts(line) {
+  const extracted = extractAllDates(line);
+  const parts = [];
+  const extras = [];
+  splitImportParts(extracted.rest).forEach((part) => {
+    if (isDateShaped(part)) extras.push(trimImportSeparators(cleanImportedLine(part)));
+    else parts.push(part);
+  });
+  let dates = extracted.dates;
+  extras.forEach((extra) => {
+    if (extra && dates.split(/\s*;\s*/).indexOf(extra) === -1) dates = dates ? `${dates}; ${extra}` : extra;
+  });
+  return { dates, parts };
+}
+
+function educationYearParts(line) {
+  const columns = String(line ?? '').split('\t').map((part) => cleanImportedLine(part)).filter(Boolean);
+  if (columns.length >= 2 && /^(?:19|20)\d{2}$/.test(columns.at(-1))) {
+    return { text: columns.slice(0, -1).join(', '), year: columns.at(-1) };
+  }
+  const exact = cleanImportedLine(line);
+  if (/^(?:19|20)\d{2}$/.test(exact)) return { text: '', year: exact };
+  return null;
+}
+
 function mergeWrappedLines(values) {
   return values.reduce((merged, value) => {
     const hasBullet = IMPORT_BULLET.test(value);
@@ -169,38 +214,62 @@ function parseExperience(lines) {
   const isBullet = (line) => IMPORT_BULLET.test(line);
   const isAnchor = (line) => {
     if (isBullet(line)) return false;
-    const date = extractDate(line);
-    if (!date) return false;
-    const rest = cleanImportedLine(line.replace(date, ''));
+    const extracted = datesAndParts(line);
+    if (!extracted.dates) return false;
+    const rest = extracted.parts.join(' ');
     return rest.length <= 90 && !/[.!?]$/.test(rest);
   };
   const headerLike = (line) => {
-    if (line === undefined || isBullet(line) || dateLine(line)) return false;
+    if (line === undefined || isBullet(line) || dateLine(line) || isDateShaped(line)) return false;
     const value = cleanImportedLine(line);
-    return Boolean(value) && value.length <= 80 && !/[.!?;:]$/.test(value) && value.split(' ').length <= 10 && !/^[a-z]/.test(value);
+    if (!value || value.length > 80 || /[.!?;:]$/.test(value) || /^[a-z]/.test(value)) return false;
+    const words = value.replace(/[|·]/g, ' ').replace(/\s[—–-]\s/g, ' ').split(/\s+/).filter(Boolean);
+    return words.length > 0 && words.length <= 10;
   };
   const anchors = raw.map((line, index) => (isAnchor(line) ? index : -1)).filter((index) => index >= 0);
   if (!anchors.length) {
     const values = raw.map(cleanImportedLine).filter(Boolean);
-    return values.length ? [{ role: values[0] || '', company: values[1] || '', dates: '', highlights: values.slice(2).join('\n') }] : [];
+    if (!values.length) return [];
+    const datedCompany = Boolean(values[1] && isDateShaped(values[1]));
+    return [{
+      role: values[0] || '',
+      company: datedCompany ? '' : (values[1] || ''),
+      dates: datedCompany ? values[1] : '',
+      highlights: values.slice(2).join('\n')
+    }];
   }
   const jobs = [];
   let consumedUntil = -1;
   anchors.forEach((anchor, position) => {
     const nextAnchor = anchors[position + 1] ?? raw.length;
-    const date = extractDate(raw[anchor]).replace(/\s+/g, ' ').trim();
-    const rest = splitImportParts(raw[anchor].replace(extractDate(raw[anchor]), ''));
+    const extracted = datesAndParts(raw[anchor]);
+    let date = extracted.dates;
+    const rest = extracted.parts;
     const prev = anchor - 1 > consumedUntil && headerLike(raw[anchor - 1]) ? anchor - 1 : -1;
     const prev2 = prev - 1 > consumedUntil && headerLike(raw[prev - 1]) ? prev - 1 : -1;
     const next = anchor + 1 < nextAnchor && anchor + 2 !== nextAnchor && headerLike(raw[anchor + 1]) ? anchor + 1 : -1;
-    const joined = (index) => splitImportParts(raw[index]).join(', ');
+    const joined = (index) => splitImportParts(raw[index]).filter((part) => !isDateShaped(part)).join(', ');
     let role = '';
     let company = '';
     let start = anchor;
     let end = anchor;
     if (!rest.length) {
       if (prev2 >= 0) { role = joined(prev2); company = joined(prev); start = prev2; }
-      else if (prev >= 0) { role = joined(prev); start = prev; if (next >= 0) { company = joined(next); end = next; } }
+      else if (prev >= 0) {
+        const parts = splitImportParts(raw[prev]).filter((part) => !isDateShaped(part));
+        const immediate = anchor + 1 < nextAnchor && headerLike(raw[anchor + 1]) ? anchor + 1 : -1;
+        const immediateIsNextJob = immediate >= 0 && immediate + 1 === nextAnchor && nextAnchor < raw.length;
+        const companyLine = immediate >= 0 && !immediateIsNextJob ? immediate : -1;
+        if (companyLine >= 0) {
+          role = joined(prev);
+          company = joined(companyLine);
+          end = companyLine;
+        } else if (parts.length >= 2) {
+          role = parts[0];
+          company = parts.slice(1).join(', ');
+        } else role = parts[0] || '';
+        start = prev;
+      }
     } else if (prev >= 0 && next < 0) {
       role = joined(prev); company = rest.join(', '); start = prev;
     } else if (rest.length >= 2) {
@@ -209,6 +278,16 @@ function parseExperience(lines) {
       role = rest[0];
       if (next >= 0) { company = joined(next); end = next; }
     }
+    if (isDateShaped(company)) {
+      const extra = trimImportSeparators(cleanImportedLine(company));
+      if (extra && date.split(/\s*;\s*/).indexOf(extra) === -1) date = date ? `${date}; ${extra}` : extra;
+      company = '';
+      if (next >= 0 && end < next) {
+        const recovered = joined(next);
+        if (recovered && !isDateShaped(recovered)) { company = recovered; end = next; }
+      }
+    }
+    if (isDateShaped(role)) role = '';
     jobs.push({ role, company, dates: date, start, end });
     consumedUntil = end;
   });
@@ -228,10 +307,35 @@ function parseEducation(lines) {
     let values = group.map((value) => trimImportSeparators(cleanImportedLine(value))).filter(Boolean);
     if (!values.length) { group = []; return; }
     if (values.length === 1) values = splitImportParts(group[0]);
-    records.push({ degree: values.length > 1 ? values.at(-2) : values[0] || '', school: values.length > 1 ? values.at(-1) : '', dates });
+    let degree = values.length > 1 ? values.at(-2) : values[0] || '';
+    let school = values.length > 1 ? values.at(-1) : '';
+    let recordDates = dates;
+    if (isDateShaped(school)) {
+      const schoolDate = trimImportSeparators(cleanImportedLine(school));
+      if (!recordDates) recordDates = schoolDate;
+      school = '';
+    }
+    if (isDateShaped(degree)) {
+      const degreeDate = trimImportSeparators(cleanImportedLine(degree));
+      if (!recordDates) recordDates = degreeDate;
+      degree = '';
+    }
+    records.push({ degree, school, dates: recordDates });
     group = [];
   };
   lines.forEach((line) => {
+    const yearParts = educationYearParts(line);
+    if (yearParts) {
+      if (!yearParts.text) {
+        activeDates = yearParts.year;
+        if (group.length) flush(activeDates);
+        return;
+      }
+      if (activeDates && group.length) flush(activeDates);
+      activeDates = yearParts.year;
+      group.push(yearParts.text);
+      return;
+    }
     if (!dateLine(line)) { group.push(line); return; }
     const date = extractDate(line);
     const rest = date ? trimImportSeparators(cleanImportedLine(line.replace(date, ''))) : '';
@@ -245,7 +349,38 @@ function parseEducation(lines) {
     group.push(rest);
   });
   if (group.length) flush(activeDates);
-  return records.filter((item) => item.degree || item.school);
+  else if (activeDates && !records.length) records.push({ degree: '', school: '', dates: activeDates });
+  return records.filter((item) => item.degree || item.school || item.dates);
+}
+
+function reviewImportedEntries(data) {
+  const flags = [];
+  const add = (section, index, field, issue, label) => flags.push({ section, index, field, issue, label });
+  const experience = Array.isArray(data?.experience) ? data.experience : [];
+  experience.forEach((item, index) => {
+    const role = cleanImportedLine(item?.role);
+    const company = cleanImportedLine(item?.company);
+    const dates = cleanImportedLine(item?.dates);
+    const highlights = cleanImportedLine(item?.highlights);
+    if (!role && !company && !dates && !highlights) return;
+    const label = role || company || `Experience ${index + 1}`;
+    if (!company) add('experience', index, 'company', 'empty', label);
+    else if (isDateShaped(company)) add('experience', index, 'company', 'date', label);
+    if (!dates) add('experience', index, 'dates', 'empty', label);
+  });
+  const education = Array.isArray(data?.education) ? data.education : [];
+  education.forEach((item, index) => {
+    const degree = cleanImportedLine(item?.degree);
+    const school = cleanImportedLine(item?.school);
+    const dates = cleanImportedLine(item?.dates);
+    if (!degree && !school && !dates) return;
+    const label = degree || school || `Education ${index + 1}`;
+    if (isDateShaped(degree)) add('education', index, 'degree', 'date', label);
+    if (!school) add('education', index, 'school', 'empty', label);
+    else if (isDateShaped(school)) add('education', index, 'school', 'date', label);
+    if (!dates) add('education', index, 'dates', 'empty', label);
+  });
+  return flags;
 }
 
 function splitSkills(lines) {
@@ -316,8 +451,8 @@ function importPdfLines(lines) {
   const isHeaderLabel = (line) => Boolean(sectionType(line)) || /^(resume|curriculum vitae|contact|professional (title|summary|experience)|work history|employment history|career history|personal details)$/i.test(line);
   const looksLikeLocation = (part) => /^[A-Z][A-Za-z.'\- ]{1,40},\s*(?:[A-Z]{2}|[A-Z][a-z]+(?: [A-Z][a-z]+)*)$/.test(part) && !/@|\d/.test(part);
   const name = headerLines.find((line) => line.length < 60 && !dateLine(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/)) || '';
-  const titleCandidate = headerLines.find((line) => line !== name && line.length < 70 && !dateLine(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/) && !looksLikeLocation(line) && !/[|\t]/.test(line));
-  const title = titleCandidate && !/@/.test(titleCandidate) ? titleCandidate : '';
+  const titleCandidate = headerLines.find((line) => line !== name && line.length < 70 && !dateLine(line) && !isDateShaped(line) && !isHeaderLabel(line) && !line.match(/\d{3,}/) && !looksLikeLocation(line) && !/[|\t]/.test(line));
+  const title = titleCandidate && !/@/.test(titleCandidate) && !isDateShaped(titleCandidate) ? titleCandidate : '';
   const location = headerRegion.flatMap(splitImportParts).find((part) => part !== name && looksLikeLocation(part)) || '';
   const summary = mergeWrappedLines((sections.summary || []).map((line) => line.replace(/\t/g, ' '))).join(' ');
   const importedExperience = parseExperience(sections.experience);
