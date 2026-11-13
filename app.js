@@ -1197,7 +1197,7 @@ function closeYourDataDialog() {
 function importReviewText(flag) {
   const place = flag.section === 'education' ? 'Education' : 'Experience';
   const fieldName = { company: 'company', dates: 'dates', school: 'school', degree: 'degree' }[flag.field] || flag.field;
-  const problem = flag.issue === 'date' ? `${fieldName} looks like a date` : `${fieldName} is empty`;
+  const problem = flag.issue === 'date' ? `${fieldName} looks like a date` : `${fieldName} ${fieldName === 'dates' ? 'are' : 'is'} empty`;
   return `${place} ${flag.index + 1} (${flag.label}): ${problem}.`;
 }
 

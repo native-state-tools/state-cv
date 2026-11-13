@@ -2677,7 +2677,7 @@ test('import review flags empty company, dates, and school on this device', asyn
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('stays on this device');
   await expect(dialog).toContainText('company is empty');
-  await expect(dialog).toContainText('dates is empty');
+  await expect(dialog).toContainText('dates are empty');
   await expect(dialog).toContainText('school is empty');
   await dialog.getByRole('button', { name: 'Review in editor' }).click();
   await expect(dialog).toBeHidden();

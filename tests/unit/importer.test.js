@@ -171,6 +171,34 @@ test('a long role | company header keeps both fields', () => {
   assert.equal(jobs[0].highlights.includes('Sample Autos'), false);
 });
 
+test('a role and Remote line keeps the company on the following line', () => {
+  const jobs = parseExperience([
+    'Customer Advocate | Remote',
+    '01/2022 \u2013 09/2022',
+    'Carvana',
+    '\u2022 Helped customers'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Customer Advocate, Remote');
+  assert.equal(jobs[0].company, 'Carvana');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(jobs[0].highlights, 'Helped customers');
+  assert.equal(jobs[0].highlights.includes('Carvana'), false);
+});
+
+test('a company and location line keeps the job title on the following line', () => {
+  const jobs = parseExperience([
+    'Acme Corp \u2014 Austin, TX',
+    '01/2022 \u2013 09/2022',
+    'Senior Analyst'
+  ]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].role, 'Acme Corp, Austin, TX');
+  assert.equal(jobs[0].company, 'Senior Analyst');
+  assert.equal(jobs[0].dates, '01/2022 \u2013 09/2022');
+  assert.equal(String(jobs[0].highlights).includes('Senior Analyst'), false);
+});
+
 test('separate role and company lines with one date range still import', () => {
   const jobs = parseExperience([
     'Senior Operations Analyst\tMar 2021 \u2013 Present',
