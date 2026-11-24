@@ -1904,7 +1904,7 @@ async function expectSupportLinks(page) {
   }
 }
 
-test('Support State CV and contact email are plain links, with no Ko-fi request on load', async ({ page }) => {
+test('Support State CV is a plain link, with no contact email and no Ko-fi request on load', async ({ page }) => {
   const kofiRequests = [];
   page.on('request', (request) => {
     if (request.url().includes('ko-fi.com')) kofiRequests.push(request.url());
@@ -1912,11 +1912,11 @@ test('Support State CV and contact email are plain links, with no Ko-fi request 
 
   await page.goto('/');
   await expectSupportLinks(page);
-  await expect(page.locator('a[href="mailto:hello@nativestatetools.com"]')).toHaveCount(1);
+  await expect(page.locator('a[href="mailto:hello@nativestatetools.com"]')).toHaveCount(0);
 
   await page.goto('/about.html');
   await expectSupportLinks(page);
-  await expect(page.locator('a[href="mailto:hello@nativestatetools.com"]')).toHaveCount(1);
+  await expect(page.locator('a[href="mailto:hello@nativestatetools.com"]')).toHaveCount(0);
   await expect(page.getByText('All features available today remain free, with no account. Future optional additions may be paid. If State CV helped you, you can chip in on Ko-fi. That support is voluntary. It is not a purchase, and it is not required to use the features available today.')).toBeVisible();
   await expect(page.getByText("The Support link opens Ko-fi's website in a new tab. State CV itself sends nothing to Ko-fi, and your CV never leaves your device.")).toBeVisible();
 
