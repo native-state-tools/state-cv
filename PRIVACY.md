@@ -34,6 +34,3 @@ This policy applies to the application at this repository and its hosted version
 
 The app makes same-origin requests only for its static files and service-worker updates. Visiting this project page is a separate interaction with the hosting server.
 
-## Contact
-
-[hello@nativestatetools.com](mailto:hello@nativestatetools.com)
